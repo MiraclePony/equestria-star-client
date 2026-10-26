@@ -39,6 +39,17 @@ uniform float crumple_top = 0.34;            // normal strength on terrain tops
 uniform float crumple_other = 0.16;          // normal strength elsewhere
 uniform float crumple_ink = 0.20;            // crease darkening
 
+// --- fine cardstock grain (RG slope, B pit cavity, A height; linear data). Claude Code ---
+uniform sampler2D grain_texture : hint_default_white, filter_linear_mipmap_anisotropic, repeat_enable;
+uniform bool use_grain = false;
+uniform float grain_scale = 0.22;            // world units per repeat
+uniform float grain_normal = 0.0;            // normal strength
+uniform float grain_albedo = 0.0;            // pit darkening + low-frequency mottle
+
+// --- seam between flush hex cards: one crisp paper-white line (terrain only) ---
+uniform float seam_width = 0.0;              // fraction of hex radius, per card (0 = off)
+uniform vec4 seam_color : source_color = vec4(0.97, 0.95, 0.90, 1.0);
+
 // --- hex paper card rim (terrain only) ---
 uniform float hex_radius = 0.55;
 uniform float rim_width : hint_range(0.0, 0.5) = 0.12;
@@ -177,6 +188,29 @@ void fragment() {
             n_world = normalize(n_world + vec3(-slope.x, 0.0, -slope.y) * k * sign(wn.y));
             cavity = mix(1.0, c.z, top);
         }
+
+        // ---- fine cardstock grain on the card top ----
+        if (use_grain && top > 0.01) {
+            vec2 guv = paper_world_position.xz / grain_scale;
+            vec4 g = texture(grain_texture, guv);
+            vec2 gs = g.rg * 2.0 - 1.0;
+            n_world = normalize(n_world + vec3(-gs.x, 0.0, -gs.y) * grain_normal * top * sign(wn.y));
+            float mottle = texture(grain_texture, guv * 0.137 + vec2(0.31, 0.77)).a;
+            color *= mix(1.0, g.b * mix(0.94, 1.06, mottle), grain_albedo * top);
+        }
+
+        // ---- seam: flush cards meet in a single crisp paper-white line ----
+        if (seam_width > 0.0) {
+            float w = max(seam_width, footprint * 0.75 / max(hex_radius, 0.001));
+            float aaw = footprint * 0.6 / max(hex_radius, 0.001) + 0.002;
+            // the card top sits at the cell origin: the bevel groove and a thin lip of the side
+            // wall join the line, deeper wall keeps the card-side colour
+            float depth = (NODE_POSITION_WORLD.y - paper_world_position.y) / max(hex_radius, 0.001);
+            float seam = smoothstep(1.0 - w - aaw, 1.0 - w + aaw, hexd) * (1.0 - smoothstep(0.055, 0.075, depth));
+            color = mix(color, seam_color.rgb, seam);
+            n_world = normalize(mix(n_world, vec3(0.0, 1.0, 0.0), seam));
+            cavity = mix(cavity, 1.0, seam);
+        }
     } else if (use_crumple && crumple_other > 0.0) {
         // ---- triplanar crumple for buildings, props and folded landforms ----
         vec3 aw = pow(abs(wn), vec3(4.0));
@@ -189,6 +223,11 @@ void fragment() {
         float fadeo = 1.0 - smoothstep(0.012, 0.05, footprint);
         n_world = normalize(n_world + pert * crumple_other * fadeo);
         cavity = mix(1.0, aw.x * cx.z + aw.y * cy.z + aw.z * cz.z, fadeo);
+        if (use_grain && grain_albedo > 0.0) {
+            vec3 q = paper_world_position / grain_scale;
+            float gp = aw.x * texture(grain_texture, q.zy).b + aw.y * texture(grain_texture, q.xz).b + aw.z * texture(grain_texture, q.xy).b;
+            color *= mix(1.0, gp, grain_albedo * 0.5);
+        }
     }
     color *= mix(1.0, cavity, crumple_ink);
 

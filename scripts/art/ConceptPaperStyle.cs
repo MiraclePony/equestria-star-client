@@ -27,6 +27,35 @@ public static class ConceptPaperStyle
     private static string StyleKey=>SunActive?"sun:":NprActive?"npr:":"";
     private static readonly Dictionary<string,Material> Materials=new();
     private static readonly Dictionary<int,ArrayMesh> Borders=new();
+    private static readonly Dictionary<int,ArrayMesh> Frames=new();
+    /// <summary>Hex ring band. Surfaces: 0 accent top + inner wall, 1 paper-white outer lip, 2 darker outer wall.</summary>
+    private static ArrayMesh BuildFrame(float radius,float inner,float height)
+    {
+        var mesh=new ArrayMesh();var tool=new SurfaceTool();
+        var h=radius*height;var ro=radius*.995f;var rb=ro-radius*.028f;var ri=radius*inner;
+        Vector3 P(int i,float r,float y){var a=Mathf.DegToRad(i*60-90);return new Vector3(Mathf.Cos(a)*r,y,Mathf.Sin(a)*r);}
+        void Quad(Vector3 a,Vector3 b,Vector3 c,Vector3 d,Vector3 n)
+        {
+            // Godot front faces wind clockwise: the face normal from the cross product must oppose n.
+            if((b-a).Cross(c-a).Dot(n)>0)(b,c)=(c,b);
+            tool.SetNormal(n);tool.AddVertex(a);tool.AddVertex(b);tool.AddVertex(c);tool.SetNormal(n);tool.AddVertex(c);tool.AddVertex(b);tool.AddVertex(d);
+        }
+        Vector3 Outward(int i){var e=Mathf.DegToRad(i*60-60);return new Vector3(Mathf.Cos(e),0,Mathf.Sin(e));}   // edge normal between corners i and i+1
+        tool.Begin(Mesh.PrimitiveType.Triangles);
+        for(var i=0;i<6;i++)
+        {
+            Quad(P(i,ri,h),P(i+1,ri,h),P(i,rb,h),P(i+1,rb,h),Vector3.Up);
+            Quad(P(i,ri,-radius*.01f),P(i+1,ri,-radius*.01f),P(i,ri,h),P(i+1,ri,h),-Outward(i));
+        }
+        tool.Commit(mesh);
+        tool.Begin(Mesh.PrimitiveType.Triangles);
+        for(var i=0;i<6;i++)Quad(P(i,rb,h),P(i+1,rb,h),P(i,ro,h*.45f),P(i+1,ro,h*.45f),(Outward(i)+Vector3.Up).Normalized());
+        tool.Commit(mesh);
+        tool.Begin(Mesh.PrimitiveType.Triangles);
+        for(var i=0;i<6;i++)Quad(P(i,ro,h*.45f),P(i+1,ro,h*.45f),P(i,ro,-radius*.08f),P(i+1,ro,-radius*.08f),Outward(i));
+        tool.Commit(mesh);
+        return mesh;
+    }
     private static readonly HashSet<BaseMaterial3D> TexturedSources=new();
     public static void ReleaseAtShutdown()
     {
@@ -36,7 +65,7 @@ public static class ConceptPaperStyle
         foreach(var material in Materials.Values)
             if(GodotObject.IsInstanceValid(material) && material is ShaderMaterial paper)
             paper.SetShaderParameter("albedo_texture",default(Variant));
-        TexturedSources.Clear();Materials.Clear();Borders.Clear();_shader=null;_nprShader=null;_sunShader=null;PaperSunlitStyle.ReleaseAtShutdown();_legacyShader=null;_legacyFibre=null;PaperFoldGeometry.Clear();PaperFlagMotion.Clear();
+        TexturedSources.Clear();Materials.Clear();Borders.Clear();Frames.Clear();_shader=null;_nprShader=null;_sunShader=null;PaperSunlitStyle.ReleaseAtShutdown();_legacyShader=null;_legacyFibre=null;PaperFoldGeometry.Clear();PaperFlagMotion.Clear();
     }
     private static ShaderMaterial Create(Color color,bool terrain=false,string board="",Texture2D? albedo=null,bool vertex=false,bool vertexSrgb=false)
     {
@@ -98,7 +127,7 @@ public static class ConceptPaperStyle
                 var key=(EquestriaStar.Game.Map.PaperWorldBackground.Enabled?"world5:":"world4:")+(LegacyMaterialForInspection?"legacy:":"")+StyleKey+(terrain?"ground:"+board:$"paper:{source.GetInstanceId()}:{flowing}");
                 if(!Materials.TryGetValue(key,out var material))
                 {
-                    material=terrain?Ground(board):Create(source.AlbedoColor,false,"",source.AlbedoTexture,source.VertexColorUseAsAlbedo,source.VertexColorIsSrgb);
+                    material=terrain?Ground(board):Create(SunActive?PaperSunlitStyle.Retint(source.ResourceName,source.AlbedoColor):source.AlbedoColor,false,"",source.AlbedoTexture,source.VertexColorUseAsAlbedo,source.VertexColorIsSrgb);
                     if(!LegacyMaterialForInspection && material is ShaderMaterial moving)moving.SetShaderParameter("water_flow",(float)flowing);
                     Materials[key]=material;
                 }
@@ -113,8 +142,22 @@ public static class ConceptPaperStyle
         {
             foreach(var child in imported.GetChildren())Apply(child,child.Name=="Terrain",cell.Data!.BoardCode);
         }
-        var landmark=OrigamiArtCatalog.Resolve(cell.Data!) is {Id:not "everfree"};
+        var art=OrigamiArtCatalog.Resolve(cell.Data!);
+        var landmark=art is {Id:not "everfree"};
         var radius=cell.Radius;
+        if(SunActive && landmark && PaperSunlitStyle.Current.LandmarkFrames)
+        {
+            // Concept: landmark cards sit in a raised coloured card frame. Visual only, outside the token lanes.
+            var s=PaperSunlitStyle.Current;
+            var frameKey=(int)Mathf.Round(radius*10000)*7919+(int)Mathf.Round(s.FrameInner*1000)*31+(int)Mathf.Round(s.FrameHeight*1000);
+            if(!Frames.TryGetValue(frameKey,out var frame)){frame=BuildFrame(radius,s.FrameInner,s.FrameHeight);Frames[frameKey]=frame;}
+            var frameInstance=new MeshInstance3D {Name="PaperLandmarkFrame",Mesh=frame};
+            var accent=PaperSunlitStyle.FrameColor(cell.Data!.BoardCode,art!.Id);
+            frameInstance.SetSurfaceOverrideMaterial(0,OrigamiMapPresentation.PaperMaterial(accent));
+            frameInstance.SetSurfaceOverrideMaterial(1,OrigamiMapPresentation.PaperMaterial(s.SeamLineColor));
+            frameInstance.SetSurfaceOverrideMaterial(2,OrigamiMapPresentation.PaperMaterial(accent.Darkened(.18f)));
+            cell.GetNode<Node3D>("VisualRoot/DecorationRoot").AddChild(frameInstance);
+        }
         var key=((int)Mathf.Round(radius*10000)*2+(landmark?1:0))*2+(SunActive?1:0);
         if(!Borders.TryGetValue(key,out var border))
         {

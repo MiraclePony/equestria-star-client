@@ -8,7 +8,7 @@ namespace EquestriaStar.Game.Map;
 /// <summary>Art-direction proposal around the supplied board, with no added gameplay cells.</summary>
 public static class ContinentalSceneryBuilder
 {
-    private sealed record Mountain(string Id, Vector3 Position, float Scale, float Yaw);
+    private sealed record Mountain(string Id, Vector3 Position, float Scale, float Yaw, string Board = "");
     public static Aabb Build(Node3D parent, IReadOnlyCollection<HexCell3D> cells, Aabb bounds, float radius,IEnumerable<EquestriaStar.Api.MapEdgeDto>? edges=null)
     {
         if (cells.Count < 20 || EnvironmentArtCatalog.Entries.Count == 0) return bounds;
@@ -30,9 +30,9 @@ public static class ContinentalSceneryBuilder
             var anchor=edge+direction*radius*1.9f;
             anchor.Y=-radius*.21f;
             var yaw=Mathf.RadToDeg(Mathf.Atan2(outward.X,outward.Y))+90;
-            mountains.Add(new Mountain(id,anchor,radius*(.96f+seed%5*.04f),yaw));
-            mountains.Add(new Mountain(id,anchor+tangent*radius*1.55f+direction*radius*.4f,radius*.64f,yaw+57));
-            mountains.Add(new Mountain(id,anchor-tangent*radius*1.35f+direction*radius*.65f,radius*.89f,yaw-38));
+            mountains.Add(new Mountain(id,anchor,radius*(.96f+seed%5*.04f),yaw,group.Key));
+            mountains.Add(new Mountain(id,anchor+tangent*radius*1.55f+direction*radius*.4f,radius*.64f,yaw+57,group.Key));
+            mountains.Add(new Mountain(id,anchor-tangent*radius*1.35f+direction*radius*.65f,radius*.89f,yaw-38,group.Key));
         }
         foreach(var m in mountains) islands.Add((new Vector2(m.Position.X,m.Position.Z),radius*1.55f));
         // Reserve an outlying southern pocket for the provisional lake and its shore plants.
@@ -40,17 +40,19 @@ public static class ContinentalSceneryBuilder
         islands.Add((lake,radius*2.45f));
         var outline = RadialCoast(centre,islands,radius);
         Vector2[] Expand(float amount) => outline.Select(p=>p+(p-centre).Normalized()*amount).ToArray();
-        OrigamiMapPresentation.AddPaperIsland(root,"ContinentalPaper",outline,-radius*.23f,radius*.19f,new Color(PaperWorldBackground.Enabled?"537b68":"829d59"));
+        OrigamiMapPresentation.AddPaperIsland(root,"ContinentalPaper",outline,-radius*.23f,radius*.19f,new Color(EquestriaStar.Art.ArtRenderProfile.IsSunlit?"4a7c3e":PaperWorldBackground.Enabled?"537b68":"829d59"));
         OrigamiMapPresentation.AddPaperIsland(root,"CreamPaperCore",Expand(radius*.035f),-radius*.42f,radius*.055f,new Color("eee0ba"));
         CoastalShoreBuilder.Add(root,outline,centre,radius);
         root.AddChild(new MeshInstance3D {Name="Sea",Position=new Vector3(centre.X,-radius*.83f,centre.Y),
             Mesh=new PlaneMesh {Size=new Vector2(200,200),Material=OrigamiMapPresentation.PaperMaterial(new Color("3e7c86"))}});
         foreach(var m in mountains)
         {
+            // P9: these boards get their own themed scenery (PaperWorldBackground); the coast outline still uses the slots.
+            if(EquestriaStar.Art.ArtRenderProfile.IsSunlit && m.Board is "D" or "E" or "F" or "G" or "H" or "I")continue;
             var model=EnvironmentArtCatalog.Place(root,m.Id,m.Position,m.Scale,m.Yaw);
             if(model==null)continue;
             model.Scale*=new Vector3(1,.85f+(OrigamiMapPresentation.Seed(model.Name)%5)*.09f,1);
-            if(m.Id=="TER101")ToneHills(model);
+            if(m.Id=="TER101" && !EquestriaStar.Art.ArtRenderProfile.IsSunlit)ToneHills(model);
             EquestriaStar.Art.PaperFoldGeometry.Apply(model);
         }
 
