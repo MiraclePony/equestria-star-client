@@ -11,11 +11,6 @@ import bpy
 from mathutils import Vector
 
 PROJECT = Path(__file__).resolve().parents[2]
-parser = argparse.ArgumentParser()
-parser.add_argument('--source-root', type=Path, required=True)
-parser.add_argument('--only', default='')
-args = parser.parse_args(sys.argv[sys.argv.index('--') + 1:])
-SOURCE = args.source_root.resolve()
 OUTPUT = PROJECT / 'assets/art/origami'
 
 # Stable asset IDs and explicit name aliases; numeric cell IDs never select art.
@@ -85,7 +80,7 @@ def simplify_materials(objects):
         mat.use_backface_culling = False
     return image_materials
 
-def export_component(source, dest):
+def export_component(source, dest, source_root):
     before = sha(source)
     bpy.ops.wm.open_mainfile(filepath=str(source))
     scene = bpy.context.scene
@@ -120,45 +115,54 @@ def export_component(source, dest):
         export_animations=False, export_extras=False, export_materials='EXPORT')
     if sha(source) != before:
         raise RuntimeError(f'Source unexpectedly changed: {source}')
-    return {'source':source.relative_to(SOURCE).as_posix(),'sourceSha256':before,
+    return {'source':source.relative_to(source_root).as_posix(),'sourceSha256':before,
         'path':'res://'+dest.relative_to(PROJECT).as_posix(),'sha256':sha(dest),
         'bytes':dest.stat().st_size,'assemblyOffsetBlender':offset,
         'boundsBlender':{'min':low,'max':high},'meshObjects':len(objects),'decalMaterials':decals}
 
-OUTPUT.mkdir(parents=True,exist_ok=True)
-catalog_path = OUTPUT/'catalog.json'
-previous = json.loads(catalog_path.read_text(encoding='utf-8')) if catalog_path.exists() else {}
-entries = {e['id']:e for e in previous.get('assets',[])}
-for asset_id,name,aliases in SPECS:
-    if args.only and asset_id not in args.only.split(','):
-        continue
-    folder = SOURCE/'交付/地块'/name
-    components = {}
-    for prefix,kind in [('01_','terrain'),('02_','building'),('03_','decoration')]:
-        sources = sorted(folder.glob(prefix+'*.blend'))
-        if len(sources)>1:
-            raise RuntimeError(f'Ambiguous {kind}: {folder}')
-        if sources:
-            components[kind] = export_component(sources[0], OUTPUT/asset_id/(kind+'.glb'))
-    if 'terrain' not in components:
-        raise RuntimeError(f'Missing terrain: {folder}')
-    entries[asset_id] = {'id':asset_id,'name':name,'aliases':[name]+aliases,
-        'status':'candidate' if '候选' in name else ('technical-ready' if name.startswith('基础_') else 'visual-review-pending'),
-        'sourceReadme':(folder/'README.md').relative_to(SOURCE).as_posix(),
-        'components':components}
-    print('EXPORTED',asset_id,flush=True)
-catalog = {'schemaVersion':1,'sourceUnits':'metres','sourceRadius':1.0,'sourceThickness':0.2,
-    'godotRotationDegreesY':30,'materialPolicy':'Matte base colours and embedded image decals; procedural Blender fibres are not baked.',
-    'unavailable':[{'name':'市政厅','reason':'制作源尚未标准化和独立拆分，暂用可交互基础地块'}],
-    'assets':[entries[s[0]] for s in SPECS if s[0] in entries]}
-catalog_path.write_text(json.dumps(catalog,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
-for entry in catalog['assets']:
-    components = entry['components']
-    lines = [f'[gd_scene load_steps={len(components)+1} format=3]', '']
-    for kind, component in components.items():
-        lines.append(f'[ext_resource type="PackedScene" path="{component["path"]}" id="{kind}"]')
-    lines += ['', '[node name="OrigamiAsset" type="Node3D"]', 'rotation_degrees = Vector3(0, 30, 0)']
-    for kind in components:
-        lines += ['', f'[node name="{kind.title()}" parent="." instance=ExtResource("{kind}")]']
-    (OUTPUT/entry['id']/'visual.tscn').write_text('\n'.join(lines)+'\n',encoding='utf-8')
-print('CATALOG',len(catalog['assets']),flush=True)
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--source-root', type=Path, required=True)
+    parser.add_argument('--only', default='')
+    args = parser.parse_args(sys.argv[sys.argv.index('--') + 1:])
+    source_root = args.source_root.resolve()
+    OUTPUT.mkdir(parents=True,exist_ok=True)
+    catalog_path = OUTPUT/'catalog.json'
+    previous = json.loads(catalog_path.read_text(encoding='utf-8')) if catalog_path.exists() else {}
+    entries = {e['id']:e for e in previous.get('assets',[])}
+    for asset_id,name,aliases in SPECS:
+        if args.only and asset_id not in args.only.split(','):
+            continue
+        folder = source_root/'交付/地块'/name
+        components = {}
+        for prefix,kind in [('01_','terrain'),('02_','building'),('03_','decoration')]:
+            sources = sorted(folder.glob(prefix+'*.blend'))
+            if len(sources)>1:
+                raise RuntimeError(f'Ambiguous {kind}: {folder}')
+            if sources:
+                components[kind] = export_component(sources[0], OUTPUT/asset_id/(kind+'.glb'), source_root)
+        if 'terrain' not in components:
+            raise RuntimeError(f'Missing terrain: {folder}')
+        entries[asset_id] = {'id':asset_id,'name':name,'aliases':[name]+aliases,
+            'status':'candidate' if '候选' in name else ('technical-ready' if name.startswith('基础_') else 'visual-review-pending'),
+            'sourceReadme':(folder/'README.md').relative_to(source_root).as_posix(),
+            'components':components}
+        print('EXPORTED',asset_id,flush=True)
+    catalog = {'schemaVersion':1,'sourceUnits':'metres','sourceRadius':1.0,'sourceThickness':0.2,
+        'godotRotationDegreesY':30,'materialPolicy':'Matte base colours and embedded image decals; procedural Blender fibres are not baked.',
+        'unavailable':[{'name':'市政厅','reason':'制作源尚未标准化和独立拆分，暂用可交互基础地块'}],
+        'assets':[entries[s[0]] for s in SPECS if s[0] in entries]}
+    catalog_path.write_text(json.dumps(catalog,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+    for entry in catalog['assets']:
+        components = entry['components']
+        lines = [f'[gd_scene load_steps={len(components)+1} format=3]', '']
+        for kind, component in components.items():
+            lines.append(f'[ext_resource type="PackedScene" path="{component["path"]}" id="{kind}"]')
+        lines += ['', '[node name="OrigamiAsset" type="Node3D"]', 'rotation_degrees = Vector3(0, 30, 0)']
+        for kind in components:
+            lines += ['', f'[node name="{kind.title()}" parent="." instance=ExtResource("{kind}")]']
+        (OUTPUT/entry['id']/'visual.tscn').write_text('\n'.join(lines)+'\n',encoding='utf-8')
+    print('CATALOG',len(catalog['assets']),flush=True)
+
+if __name__ == "__main__":
+    main()

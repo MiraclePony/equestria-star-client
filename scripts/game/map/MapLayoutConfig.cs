@@ -40,6 +40,7 @@ public static class MapLayoutConfig
 
     private static readonly Dictionary<string, StandardMaterial3D> TopMaterials = new(StringComparer.Ordinal);
     private static readonly Dictionary<string, StandardMaterial3D> SideMaterials = new(StringComparer.Ordinal);
+    internal static void ReleaseAtShutdown(){foreach(var material in TopMaterials.Values)EquestriaStar.Art.PaperMaterialLifetime.Remember(material);foreach(var material in SideMaterials.Values)EquestriaStar.Art.PaperMaterialLifetime.Remember(material);TopMaterials.Clear();SideMaterials.Clear();}
 
     public static IReadOnlyDictionary<string, Vector2> BoardOffsets => Offsets;
     public static IReadOnlyDictionary<string, Color> BoardColors => Palette;

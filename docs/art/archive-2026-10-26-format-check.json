@@ -1,0 +1,208 @@
+{
+  "status": "compatibility-check-passed-with-existing-gaps",
+  "atUtc": "2026-10-26T07:53:40.152601+00:00",
+  "checks": [
+    {
+      "name": "Original document: 小马国之星前端重构需求与后端接口交接文档.md",
+      "passed": true,
+      "detail": "Original interface/handoff document preserved unchanged."
+    },
+    {
+      "name": "Original document: 小马国之星_前端接口文档.md",
+      "passed": true,
+      "detail": "Original interface/handoff document preserved unchanged."
+    },
+    {
+      "name": "Original document: 小马国之星-前端地图中文映射交接文档.md",
+      "passed": true,
+      "detail": "Original interface/handoff document preserved unchanged."
+    },
+    {
+      "name": "Original document: 小马国之星-前端中文映射交接文档.md",
+      "passed": true,
+      "detail": "Original interface/handoff document preserved unchanged."
+    },
+    {
+      "name": "Original document: 小马国之星行动结果与玩家可读日志接口交接说明.md",
+      "passed": true,
+      "detail": "Original interface/handoff document preserved unchanged."
+    },
+    {
+      "name": "Original document: 前端接口同步说明_20260708.md",
+      "passed": true,
+      "detail": "Original interface/handoff document preserved unchanged."
+    },
+    {
+      "name": "Original document: API接口清单.md",
+      "passed": true,
+      "detail": "Original interface/handoff document preserved unchanged."
+    },
+    {
+      "name": "Original document: ES完整API文档.md",
+      "passed": true,
+      "detail": "Original interface/handoff document preserved unchanged."
+    },
+    {
+      "name": "Engine and runtime",
+      "passed": true,
+      "detail": "Godot 4.6.2 .NET / C# / .NET 8."
+    },
+    {
+      "name": "Normal application entry",
+      "passed": true,
+      "detail": "Offline OrigamiGallery does not replace login/application entry."
+    },
+    {
+      "name": "Existing API/state boundary unchanged",
+      "passed": true,
+      "detail": "No art change to protocol DTOs, HTTP request serialization, session state or credentials handling."
+    },
+    {
+      "name": "UTF8 and envelope conventions",
+      "passed": true,
+      "detail": "Existing UTF8 JSON, case-insensitive response binding and code/data/msg/errorCode handling retained; covered by RunUnitTests."
+    },
+    {
+      "name": "Existing request field names",
+      "passed": true,
+      "detail": "Requests already use explicitly named lower-camel anonymous properties; no global naming policy is required by the original documents."
+    },
+    {
+      "name": "Non-game footer and player text",
+      "passed": true,
+      "detail": "52 px footer falls in original suggested 48–64 range. Game-page exception is recorded separately."
+    },
+    {
+      "name": "Map Chinese display precedence",
+      "passed": true,
+      "detail": "Display name prefers cellNameText; protocol identity/coordinates remain separate."
+    },
+    {
+      "name": "Directory: scripts/api",
+      "passed": true,
+      "detail": "Existing Godot project directory organization retained."
+    },
+    {
+      "name": "Directory: scripts/state",
+      "passed": true,
+      "detail": "Existing Godot project directory organization retained."
+    },
+    {
+      "name": "Directory: scripts/ui",
+      "passed": true,
+      "detail": "Existing Godot project directory organization retained."
+    },
+    {
+      "name": "Directory: scripts/game/map",
+      "passed": true,
+      "detail": "Existing Godot project directory organization retained."
+    },
+    {
+      "name": "Directory: scenes/app",
+      "passed": true,
+      "detail": "Existing Godot project directory organization retained."
+    },
+    {
+      "name": "Directory: scenes/screens",
+      "passed": true,
+      "detail": "Existing Godot project directory organization retained."
+    },
+    {
+      "name": "Directory: scenes/game/map",
+      "passed": true,
+      "detail": "Existing Godot project directory organization retained."
+    },
+    {
+      "name": "Directory: assets/art",
+      "passed": true,
+      "detail": "Existing Godot project directory organization retained."
+    },
+    {
+      "name": "UTF8 resource/source texts",
+      "passed": true,
+      "detail": "824 text files decoded strictly as UTF8."
+    },
+    {
+      "name": "Strict JSON resource files",
+      "passed": true,
+      "detail": "9 JSON documents parsed; NaN/Infinity rejected."
+    },
+    {
+      "name": "Scene/resource paths and case",
+      "passed": true,
+      "detail": "454 explicit scene/tres res:// paths checked, including exact case."
+    },
+    {
+      "name": "Godot partial class/filename convention",
+      "passed": true,
+      "detail": "49 public partial classes checked."
+    },
+    {
+      "name": "Runtime catalog export inclusion",
+      "passed": true,
+      "detail": [
+        "assets/art/map-presentation.json",
+        "assets/art/reference-rail-draft.json",
+        "assets/art/token-layout.json",
+        "assets/art/zoom-detail.json",
+        "assets/art/environment/catalog.json",
+        "assets/art/origami/catalog.json"
+      ]
+    }
+  ],
+  "failures": [],
+  "originalDocuments": [
+    {
+      "path": "小马国之星前端重构需求与后端接口交接文档.md",
+      "sha256": "f103a9cb568c85989328e2549e35bfb74f6a26b0aa7b7f29972fc68470739d04"
+    },
+    {
+      "path": "小马国之星_前端接口文档.md",
+      "sha256": "0244705aa8ffa5435e9b21a9db5fd2f35348582f8a53b33cedaf7afc3dbb1ddd"
+    },
+    {
+      "path": "小马国之星-前端地图中文映射交接文档.md",
+      "sha256": "2e8efba9185a1ae977862694ad7048431aa0b20f31d64529d409d0b4d5e389d4"
+    },
+    {
+      "path": "小马国之星-前端中文映射交接文档.md",
+      "sha256": "7438149866c75696d4054a1c7062d114302497b0a44ff4bd7c0bac94bec89d31"
+    },
+    {
+      "path": "小马国之星行动结果与玩家可读日志接口交接说明.md",
+      "sha256": "c49528742cda4e946b6d7b628e6a1e368e2a92e78155734fe28c142214ec5a12"
+    },
+    {
+      "path": "前端接口同步说明_20260708.md",
+      "sha256": "d77d289df2377b28568a833ed48fcdcce4ff40efaa222453674cf9001de530e7"
+    },
+    {
+      "path": "API接口清单.md",
+      "sha256": "7ed409f76c6a4913040367a031543f522a5ea6588dbac494fb311248510ffded"
+    },
+    {
+      "path": "ES完整API文档.md",
+      "sha256": "851361e88bf30d7b070b6a73f8d6b63027da8a635a52e3369183dd769f1cf805"
+    }
+  ],
+  "existingGaps": [
+    {
+      "id": "game-footer",
+      "original": "Original reconstruction document §2 suggests one fixed bottom player footer on all pages.",
+      "current": "App.ShowGame hides the global 52px footer; in-game GameHud displays player information.",
+      "baselineUnchanged": true
+    },
+    {
+      "id": "complete-action-flow",
+      "original": "Original reconstruction document §§15–17 describes the complete action/dialog/player-facing log/settlement experience.",
+      "current": "Current normal GameScreen mainly integrates server map, player HUD and refresh/retry. Full action/log/settlement UI is not comprehensively implemented or accepted by this art archive.",
+      "scope": "Existing frontend feature scope gap; no claim of complete online gameplay acceptance."
+    },
+    {
+      "id": "historical-endpoints",
+      "original": "Some early documents describe owner-start and an older room flow.",
+      "current": "README explicitly makes ES完整API文档.md, API接口清单.md and current protocol implementation authoritative for ready/selection/automatic start; do not restore a removed endpoint to satisfy an older example."
+    }
+  ],
+  "scope": "Archive format/resources and art-delta compatibility review, not complete frontend functional/online acceptance. No repository-wide formatter/editorconfig is defined; no invented style rule or bulk code rewrite applied."
+}

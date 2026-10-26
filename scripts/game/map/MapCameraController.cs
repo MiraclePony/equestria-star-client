@@ -17,8 +17,8 @@ public partial class MapCameraController : Node3D
     [Export(PropertyHint.Range, "0.5,0.99,0.01")]
     public float ZoomFactor { get; set; } = 0.9f;
 
-    [Export(PropertyHint.Range, "0.1,0.8,0.01")]
-    public float MinZoomRatio { get; set; } = 0.25f;
+    [Export(PropertyHint.Range, "0.05,0.8,0.01")]
+    public float MinZoomRatio { get; set; } = 0.08f;
 
     [Export(PropertyHint.Range, "1.0,2.0,0.01")]
     public float MaxZoomRatio { get; set; } = 1.35f;
@@ -275,6 +275,19 @@ public partial class MapCameraController : Node3D
         _targetSize = Mathf.Clamp(nextTarget, _minimumSize, _maximumSize);
         UpdatePanBounds(_targetSize);
         ClampRigPosition();
+    }
+
+    public void FocusGround(Vector3 world,float size,bool immediate=false)
+    {
+        if(!_hasMap)return;
+        _zoomAnchorScreen=null;_targetSize=Mathf.Clamp(size,_minimumSize,_maximumSize);
+        UpdatePanBounds(_targetSize);
+        if(TryGetGroundIntersection(_viewport.GetVisibleRect().GetCenter(),out var current))
+        {
+            _targetRigPosition+=new Vector3(world.X-current.X,0,world.Z-current.Z);
+            Position=new Vector3(_targetRigPosition.X,Position.Y,_targetRigPosition.Z);
+        }
+        ClampRigPosition();if(immediate)_camera.Size=_targetSize;
     }
 
     public void BeginPointerGesture(Vector2 screenPosition, Vector3 groundPoint)

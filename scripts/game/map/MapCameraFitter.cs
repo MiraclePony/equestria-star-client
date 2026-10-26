@@ -13,7 +13,7 @@ public readonly record struct MapCameraFitPlan(
 
 public static class MapCameraFitter
 {
-    private static readonly Vector3 ViewOffsetDirection = new Vector3(0.0f, 1.35f, 0.92f).Normalized();
+    private static readonly Vector3 ViewOffsetDirection = new Vector3(0.14f, 1.05f, 1.22f).Normalized();
 
     public static MapCameraFitPlan Calculate(Aabb bounds, float viewportAspect, float padding = 1.12f)
     {

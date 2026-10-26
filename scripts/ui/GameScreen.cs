@@ -77,6 +77,11 @@ public partial class GameScreen : Control
         }
     }
 
+    public override void _Process(double delta)
+    {
+        if(_mapScene?.DetailController is { } detail && GodotObject.IsInstanceValid(_hud))detail.ViewInsets=_hud.MapViewInsets;
+    }
+
     public void Start()
     {
         if (_active)

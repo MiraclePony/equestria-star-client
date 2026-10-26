@@ -3,15 +3,20 @@ import argparse, hashlib, json, math, struct
 from pathlib import Path
 parser=argparse.ArgumentParser()
 parser.add_argument('--source-root',type=Path)
+parser.add_argument('--catalog',default='assets/art/origami/catalog.json')
 args=parser.parse_args()
 root=Path(__file__).resolve().parents[2]
-catalog=json.loads((root/'assets/art/origami/catalog.json').read_text(encoding='utf-8'))
+catalog_path=root/args.catalog
+catalog=json.loads(catalog_path.read_text(encoding='utf-8'))
 aliases=set(); components=0; size=0; triangles=0
 for entry in catalog['assets']:
-    assert (root/'assets/art/origami'/entry['id']/'visual.tscn').exists(),entry['id']
+    assert (catalog_path.parent/entry['id']/'visual.tscn').exists(),entry['id']
     for alias in entry['aliases']:
         assert alias.casefold() not in aliases,alias
         aliases.add(alias.casefold())
+    if args.source_root:
+        for dependency in entry.get('dependencies',[]):
+            assert hashlib.sha256((args.source_root/dependency['source']).read_bytes()).hexdigest()==dependency['sourceSha256'],dependency['source']
     for kind,component in entry['components'].items():
         path=root/component['path'].removeprefix('res://')
         binary=path.read_bytes()

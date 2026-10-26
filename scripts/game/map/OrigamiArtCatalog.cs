@@ -11,6 +11,7 @@ public static class OrigamiArtCatalog
     public sealed class Component
     {
         public string Path { get; set; } = "";
+        public string Sha256 { get; set; } = "";
         public Bounds BoundsBlender { get; set; } = new();
     }
     public sealed class Bounds
@@ -82,6 +83,7 @@ public static class OrigamiArtCatalog
         if (scene != null) Scenes[entry.Id] = scene;
         return scene;
     }
+    public static void ReleaseSceneCache()=>Scenes.Clear();
 
     public static float Apply(HexCell3D cell, Entry entry)
     {

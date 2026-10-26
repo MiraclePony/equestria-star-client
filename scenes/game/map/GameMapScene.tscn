@@ -10,7 +10,7 @@ background_mode = 1
 background_color = Color(0.82, 0.87, 0.84, 1)
 ambient_light_source = 2
 ambient_light_color = Color(0.79, 0.86, 0.94, 1)
-ambient_light_energy = 0.55
+ambient_light_energy = 0.32
 reflected_light_source = 1
 tonemap_mode = 2
 
@@ -63,12 +63,12 @@ CellScene = ExtResource("2_cell")
 environment = SubResource("Environment_map")
 
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
-rotation_degrees = Vector3(-56, -28, 0)
-light_color = Color(1, 0.94, 0.83, 1)
-light_energy = 0.95
+rotation_degrees = Vector3(-48, -42, 0)
+light_color = Color(1, 0.925, 0.78, 1)
+light_energy = 1.05
 shadow_enabled = true
-shadow_opacity = 0.65
-shadow_blur = 1.5
+shadow_opacity = 0.86
+shadow_blur = 1.2
 directional_shadow_max_distance = 40.0
 
 [node name="Floor" type="MeshInstance3D" parent="."]
@@ -81,8 +81,8 @@ script = ExtResource("4_camera")
 [node name="Camera3D" type="Camera3D" parent="CameraRig"]
 projection = 1
 size = 16.0
-near = 0.05
-far = 100.0
+near = 0.3
+far = 65.0
 current = true
 
 [node name="CanvasLayer" type="CanvasLayer" parent="."]

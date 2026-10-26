@@ -27,6 +27,16 @@ public partial class GameHud : CanvasLayer
 
     public long? BoundCurrentUserId { get; private set; }
     public int OtherPlayerCount { get; private set; }
+    public Vector4 MapViewInsets
+    {
+        get
+        {
+            var rail=GetNodeOrNull<Control>("HudRoot/LeftMargin");
+            if(rail==null || !rail.IsVisibleInTree())return Vector4.Zero;
+            var width=GetViewport().GetVisibleRect().Size.X;
+            return new Vector4(Mathf.Clamp(rail.GetGlobalRect().End.X+12,0,width*.45f),0,0,0);
+        }
+    }
 
     public override void _Ready()
     {

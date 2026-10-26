@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using EquestriaStar.Api;
 using Godot;
 
@@ -32,7 +33,9 @@ public sealed class GameMapBuilder
         float height,
         float bevelWidth,
         bool showDebugLabels,
-        bool useOrigamiArt = true
+        bool useOrigamiArt = true,
+        bool useEnvironmentArt = true,
+        bool useTokenLayout = true
     )
     {
         var validation = MapDataValidator.Validate(map);
@@ -42,6 +45,7 @@ public sealed class GameMapBuilder
         }
 
         var safeRadius = Math.Max(0.1f, radius);
+        var detailCamera=mapRoot.GetParent() is GameMapScene stage?stage.CameraController?.Camera:null;
         var safeHeight = Math.Max(0.02f, height);
         var newRoot = new Node3D { Name = "GeneratedCells" };
         var newCellsById = new Dictionary<long, HexCell3D>();
@@ -63,7 +67,7 @@ public sealed class GameMapBuilder
                 cell.Radius = safeRadius;
                 cell.Height = safeHeight;
                 cell.BevelWidth = bevelWidth;
-                cell.TopMaterial = MapLayoutConfig.GetTopMaterial(dto.BoardCode);
+                cell.TopMaterial = useOrigamiArt && useEnvironmentArt ? EquestriaStar.Art.ConceptPaperStyle.Ground(dto.BoardCode) : MapLayoutConfig.GetTopMaterial(dto.BoardCode);
                 cell.SideMaterial = MapLayoutConfig.GetSideMaterial(dto.BoardCode);
                 cell.ShowDebugLabel = showDebugLabels;
                 cell.Position = HexCoordinateConverter.ToWorld(q, r, dto.BoardCode, safeRadius);
@@ -92,8 +96,12 @@ public sealed class GameMapBuilder
                     InteractionTags = tags
                 });
 
-                if (useOrigamiArt && OrigamiArtCatalog.Resolve(cell.Data!) is { } art)
+                var art = useOrigamiArt ? OrigamiArtCatalog.Resolve(cell.Data!) : null;
+                if (art != null)
+                {
+                    if (useEnvironmentArt) cell.CustomVisualYawDegrees = OrigamiMapPresentation.Orientation(art, cell.Data!);
                     maxVisualHeight = Math.Max(maxVisualHeight, OrigamiArtCatalog.Apply(cell, art));
+                }
 
                 var debugLabel = cell.GetNode<Label3D>("DebugLabel");
                 debugLabel.FontSize = 34;
@@ -122,10 +130,45 @@ public sealed class GameMapBuilder
         _cellsById = newCellsById;
         _cellsByCode = newCellsByCode;
         _edges = map.Edges!.AsReadOnly();
+        if (useOrigamiArt && useEnvironmentArt)
+            foreach (var cell in _cellsById.Values)
+            {
+                OrigamiMapPresentation.Decorate(cell, OrigamiArtCatalog.Resolve(cell.Data!),detailCamera!=null);
+                if(useTokenLayout)PawnArtLayout.Apply(cell,OrigamiArtCatalog.Resolve(cell.Data!));
+                EquestriaStar.Art.PaperFoldGeometry.Apply(cell.GetNode<Node3D>("VisualRoot"));
+                if(EquestriaStar.Art.ArtRenderProfile.IsFairy)
+                {EquestriaStar.Art.PaperFoldGeometry.PrepareWind(cell.GetNode<Node3D>("VisualRoot"));EquestriaStar.Art.PaperFlagMotion.Prepare(cell.GetNode<Node3D>("VisualRoot"));}
+                EquestriaStar.Art.PaperGroundContact.Apply(cell);
+                EquestriaStar.Art.ConceptPaperStyle.ApplyCell(cell);
+                EquestriaStar.Art.ConceptPaperStyle.Apply(cell.GetNode<Node3D>("VisualRoot/DecorationRoot"));
+            }
         var bounds = new Aabb(
             new Vector3(minX, -safeHeight, minZ),
             new Vector3(maxX - minX, safeHeight + maxVisualHeight, maxZ - minZ)
         );
+        if (useOrigamiArt && useEnvironmentArt)
+        {
+            bounds = OrigamiMapPresentation.AddContinent(newRoot, _cellsById.Values.ToArray(), bounds, safeRadius,_edges);
+            var scenery=newRoot.GetNodeOrNull<Node3D>("ContinentalScenery");
+            if(scenery!=null)EquestriaStar.Art.ConceptPaperStyle.Apply(scenery);
+            if(EquestriaStar.Art.ArtRenderProfile.IsFairy)EquestriaStar.Art.PaperPlaceComposition.Build(newRoot,_cellsById.Values.ToArray());
+            var environmentMotion=new EquestriaStar.Art.PaperEnvironmentMotion {Name="PaperEnvironmentMotion"};newRoot.AddChild(environmentMotion);
+            environmentMotion.Configure(mapRoot,_cellsById.Values.ToArray(),detailCamera);
+            var smallShadows=0;
+            foreach(var cell in _cellsById.Values)
+            {
+                var imported=cell.GetNodeOrNull<Node3D>("VisualRoot/CustomVisualRoot/OrigamiAsset/Decoration");
+                var added=cell.GetNodeOrNull<Node3D>("VisualRoot/DecorationRoot/LocalVegetation");
+                if(imported!=null)smallShadows+=SceneryShadowBudget.Apply(imported,safeRadius);
+                if(added!=null)smallShadows+=SceneryShadowBudget.Apply(added,safeRadius);
+            }
+            newRoot.SetMeta("tiny_shadow_casters_disabled",smallShadows);
+            if(detailCamera!=null)
+            {
+                var details=new ZoomArtDetailController {Name="ZoomArtDetailController"};newRoot.AddChild(details);
+                details.Configure(detailCamera,_cellsById.Values,mapRoot,_edges);
+            }
+        }
         return new MapBuildResult(true, "", _cellsById.Count, _edges.Count, bounds);
     }
 

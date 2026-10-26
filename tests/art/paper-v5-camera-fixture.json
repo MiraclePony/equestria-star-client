@@ -1,0 +1,78 @@
+{
+  "purpose": "Fixed camera input fixture only; no diagnostic samples or acceptance assertions. Copy to ignored artifacts/paper-v5-before-diagnostic.json only if absent to run legacy camera readers.",
+  "sourceDiagnosticSha256": "3acf201f22c393b59317ae44a0f11220a726e537442bf4c78d91c96f0cbd4cc5",
+  "cameras": [
+    {
+      "view": "overview",
+      "size": 15.714009,
+      "origin": [
+        5.4234047,
+        16.465738,
+        23.000761
+      ],
+      "x": [
+        0.9934801,
+        0,
+        -0.114005916
+      ],
+      "y": [
+        -0.074089184,
+        0.76004416,
+        -0.6456343
+      ],
+      "z": [
+        0.08664953,
+        0.6498714,
+        0.75508875
+      ]
+    },
+    {
+      "view": "region",
+      "size": 7.101977,
+      "origin": [
+        2.671746,
+        16.465738,
+        23.000761
+      ],
+      "x": [
+        0.9934801,
+        0,
+        -0.114005916
+      ],
+      "y": [
+        -0.074089184,
+        0.76004416,
+        -0.6456343
+      ],
+      "z": [
+        0.08664953,
+        0.6498714,
+        0.75508875
+      ]
+    },
+    {
+      "view": "close",
+      "size": 3.087818,
+      "origin": [
+        6.958572,
+        16.465738,
+        24.081621
+      ],
+      "x": [
+        0.9934801,
+        0,
+        -0.114005916
+      ],
+      "y": [
+        -0.074089184,
+        0.76004416,
+        -0.6456343
+      ],
+      "z": [
+        0.08664953,
+        0.6498714,
+        0.75508875
+      ]
+    }
+  ]
+}

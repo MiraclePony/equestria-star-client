@@ -17,8 +17,20 @@ internal static class HexCellMeshFactory
     private static readonly Dictionary<GeometryKey, HexCellGeometryResources> GeometryCache = new();
     private static readonly Dictionary<uint, StandardMaterial3D> HighlightMaterialCache = new();
 
-    public static StandardMaterial3D DefaultTopMaterial { get; } = CreateSurfaceMaterial(new Color("91b7a6"), 0.88f);
-    public static StandardMaterial3D DefaultSideMaterial { get; } = CreateSurfaceMaterial(new Color("476d68"), 0.76f);
+    private static StandardMaterial3D? _defaultTopMaterial;
+    private static StandardMaterial3D? _defaultSideMaterial;
+    public static StandardMaterial3D DefaultTopMaterial => _defaultTopMaterial ??= CreateSurfaceMaterial(new Color("91b7a6"), 0.88f);
+    public static StandardMaterial3D DefaultSideMaterial => _defaultSideMaterial ??= CreateSurfaceMaterial(new Color("476d68"), 0.76f);
+
+    // Exit only, after all scene instances have detached. Do not keep native materials
+    // rooted until the unordered managed-singleton disposal phase.
+    internal static void ReleaseAtShutdown()
+    {
+        foreach(var material in HighlightMaterialCache.Values)EquestriaStar.Art.PaperMaterialLifetime.Remember(material);
+        EquestriaStar.Art.PaperMaterialLifetime.Remember(_defaultTopMaterial);EquestriaStar.Art.PaperMaterialLifetime.Remember(_defaultSideMaterial);
+        GeometryCache.Clear();HighlightMaterialCache.Clear();
+        _defaultTopMaterial=null;_defaultSideMaterial=null;
+    }
 
     public static HexCellGeometryResources GetGeometry(float radius, float height, float bevelWidth)
     {

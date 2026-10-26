@@ -42,6 +42,13 @@ public partial class GameMapScene : Node3D
     [Export]
     public bool UseOrigamiArt { get; set; } = true;
 
+    [Export]
+    public bool UseEnvironmentArt { get; set; } = true;
+    [Export]
+    public bool UseTokenLayout {get;set;}=true;
+
+    public EquestriaStar.Art.PaperAtmosphere PaperEffect { get; private set; } = null!;
+
     private readonly GameMapBuilder _builder = new();
     private Node3D _mapRoot = null!;
     private MapCameraController _cameraController = null!;
@@ -65,9 +72,12 @@ public partial class GameMapScene : Node3D
     public IReadOnlyDictionary<string, HexCell3D> CellsByCode => _builder.CellsByCode;
     public IReadOnlyList<MapEdgeDto> Edges => _builder.Edges;
     public MapCameraController CameraController => _cameraController;
+    public ZoomArtDetailController? DetailController=>_mapRoot?.GetNodeOrNull<ZoomArtDetailController>("GeneratedCells/ZoomArtDetailController");
 
     public override void _Ready()
     {
+        PaperEffect = new EquestriaStar.Art.PaperAtmosphere { Name="PaperAtmosphere" };
+        AddChild(PaperEffect);
         _mapRoot = GetNode<Node3D>("MapRoot");
         _cameraController = GetNode<MapCameraController>("CameraRig");
         _floor = GetNode<MeshInstance3D>("Floor");
@@ -82,6 +92,7 @@ public partial class GameMapScene : Node3D
         _cameraController.DragStarted += OnCameraDragStarted;
         _errorState.Visible = false;
         _mapInfoLabel.Visible = false;
+        EquestriaStar.Art.ArtRenderProfile.Apply(this);
 
         if (AutoLoadOnReady)
         {
@@ -176,7 +187,9 @@ public partial class GameMapScene : Node3D
             CellHeight,
             CellBevelWidth,
             ShowQrCoordinates,
-            UseOrigamiArt
+            UseOrigamiArt,
+            UseEnvironmentArt,
+            UseTokenLayout
         );
         if (!buildResult.Ok)
         {
@@ -211,7 +224,7 @@ public partial class GameMapScene : Node3D
 
     private void UpdateFloor(Aabb bounds)
     {
-        _floor.Position = new Vector3(bounds.GetCenter().X, -CellHeight - 0.025f, bounds.GetCenter().Z);
+        _floor.Position = new Vector3(bounds.GetCenter().X, UseOrigamiArt && UseEnvironmentArt ? -CellRadius : -CellHeight - 0.025f, bounds.GetCenter().Z);
         if (_floor.Mesh is PlaneMesh plane)
         {
             plane.Size = new Vector2(bounds.Size.X + CellRadius * 20.0f, bounds.Size.Z + CellRadius * 20.0f);

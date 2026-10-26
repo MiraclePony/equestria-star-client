@@ -59,6 +59,9 @@ public partial class HexCell3D : Node3D
     public float CustomTerrainHeightScale { get; set; } = 1.0f;
 
     [Export]
+    public float CustomVisualYawDegrees { get; set; }
+
+    [Export]
     public Mesh? CustomMesh
     {
         get => _customMesh;
@@ -255,6 +258,7 @@ public partial class HexCell3D : Node3D
             if (_customVisualInstance is Node3D visual)
             {
                 visual.Scale = CustomVisualScale;
+                visual.RotateY(Mathf.DegToRad(CustomVisualYawDegrees));
                 var terrain = visual.GetNodeOrNull<Node3D>("Terrain");
                 if (terrain != null)
                     terrain.Scale = new Vector3(1, CustomTerrainHeightScale, 1);

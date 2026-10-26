@@ -1,0 +1,15 @@
+{
+  "thresholds": [0.06, 0.16, 0.35],
+  "hysteresis": 0.10,
+  "prefetchRatio": 0.12,
+  "prefetchMargin": 0.15,
+  "fadeSeconds": 0.30,
+  "cacheGraceSeconds": 8,
+  "maxConcurrentLoads": 2,
+  "maxCachedResources": 32,
+  "maxNearCells": 12,
+  "maxRetainedCells": 32,
+  "maxInstancesPerFrame": 1,
+  "maxReleasesPerFrame": 2,
+  "instantiateBudgetMs": 2
+}

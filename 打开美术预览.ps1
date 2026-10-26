@@ -1,4 +1,4 @@
-param([string]$GodotPath = '', [switch]$SkipBuild)
+param([string]$GodotPath = '', [switch]$SkipBuild, [int]$View = 50, [ValidateSet('Mobile','Desktop','Compatibility')][string]$Quality = 'Desktop', [switch]$Photo, [string]$FocusCell = '', [float]$DetailScale = 0,[ValidateRange(0,6)][int]$PaperPreset=5,[switch]$Reduced)
 $ErrorActionPreference='Stop'
 Set-Location -LiteralPath $PSScriptRoot
 if (-not $GodotPath) {
@@ -12,4 +12,11 @@ if (-not $SkipBuild) {
     dotnet build --nologo
     if ($LASTEXITCODE -ne 0) {throw 'C#构建失败'}
 }
-& $GodotPath --path . res://scenes/art/OrigamiGallery.tscn
+$renderMethod=switch($Quality) {'Desktop' {'forward_plus'} 'Compatibility' {'gl_compatibility'} default {'mobile'}}
+$artArgs=@('--art-view',"$View",'--paper-preset',"$PaperPreset")
+if($Reduced){$artArgs+='--paper-reduced'}
+if ($Quality -eq 'Desktop') { $artArgs+='--art-quality' }
+if ($Photo) { $artArgs+='--art-diorama' }
+if ($FocusCell) { $artArgs+=@('--art-focus',$FocusCell) }
+if ($DetailScale -gt 0) { $artArgs+=@('--art-scale',$DetailScale.ToString([Globalization.CultureInfo]::InvariantCulture)) }
+& $GodotPath --path . --rendering-method $renderMethod res://scenes/art/OrigamiGallery.tscn -- @artArgs
