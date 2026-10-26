@@ -1098,6 +1098,72 @@
       }
     },
     {
+      "id": "town-hall",
+      "name": "市政厅",
+      "aliases": [
+        "市政厅",
+        "小马谷市政厅",
+        "TownHall"
+      ],
+      "status": "visual-review-pending",
+      "sourceReadme": "交付/地块/市政厅/README.md",
+      "components": {
+        "terrain": {
+          "source": "交付/地块/糖块屋/01_地块.blend",
+          "sourceSha256": "1bfff702916dea72b181b07ba1f4413ebda30a39c894502959363e55ea5850ee",
+          "path": "res://assets/art/origami/town-hall/terrain.glb",
+          "sha256": "e9ab81eb6bf6f07b8788eb4d9583d3582af1a2b6f219ecacd0f49a7b6b30d0e2",
+          "bytes": 6564,
+          "assemblyOffsetBlender": [
+            0,
+            0,
+            0
+          ],
+          "boundsBlender": {
+            "min": [
+              -1.0,
+              -0.8660253882408142,
+              -0.20000000298023224
+            ],
+            "max": [
+              1.0,
+              0.8660253882408142,
+              0.0
+            ]
+          },
+          "meshObjects": 1,
+          "decalMaterials": []
+        },
+        "building": {
+          "source": "折纸市政厅2.blend",
+          "sourceSha256": "bdc5e6dd41b7c91a64f95ef8b892b99163b3857ac79ee2fd92047af92385cdd0",
+          "path": "res://assets/art/origami/town-hall/building.glb",
+          "sha256": "52a899b690eb286078465c2029c60ae31510a9229703c5edfa2582761b15f797",
+          "bytes": 423692,
+          "assemblyOffsetBlender": [
+            0,
+            0,
+            0
+          ],
+          "boundsBlender": {
+            "min": [
+              -0.46203482151031494,
+              -0.45271486043930054,
+              0.0
+            ],
+            "max": [
+              0.433196485042572,
+              0.4425164461135864,
+              1.4905771017074585
+            ]
+          },
+          "meshObjects": 1,
+          "decalMaterials": [],
+          "exporter": "AI协作_前端美术/协作者提交/Claude_Code/export_townhall.py (concept palette, scale 0.5, pennants added)"
+        }
+      }
+    },
+    {
       "id": "manehattan-district",
       "name": "马哈顿火车站",
       "aliases": [

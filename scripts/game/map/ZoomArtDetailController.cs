@@ -204,7 +204,7 @@ public partial class ZoomArtDetailController : Node
         if(PaperCellDiorama.Enabled)
         {
             // Widest zoom reads like a strategy map: pawn beacons up, exterior scenery steps back.
-            _overview=Mathf.MoveToward(_overview,stage==0?1f:stage==1?.4f:0f,(float)delta/Settings.FadeSeconds);
+            _overview=Mathf.MoveToward(_overview,stage==0?1f:0f,(float)delta/Settings.FadeSeconds);
             RenderingServer.GlobalShaderParameterSet("paper_overview",_overview);
             foreach(var slot in _slots)
             {

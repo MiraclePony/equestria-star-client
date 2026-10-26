@@ -24,7 +24,10 @@ public static class PaperCellDiorama
     private sealed record Item(string Id, float Size, int Count, float Inner = .40f, float Outer = .90f, float Y = 0, float MaxHeight = 0);
 
     private static Item[] Theme(string board, bool forest) => forest ? [
-            new("VEG006|VEG007|VEG008|VEG009", .27f, 15, .37f, .95f, 0, .42f),
+            new("@thorn", .34f, 10, .37f, .96f),
+            new("VEG006|VEG007|VEG008|VEG009", .26f, 24, .36f, .97f, 0, .46f),
+            new("@moss", .30f, 5, .36f, .92f),
+            new("@shroom", .07f, 6, .36f, .9f),
             new("VEG104", .12f, 9, .36f, .92f, 0, .14f),
             new("DEC101", .08f, 8, .36f, .92f, 0, .10f),
         ] : board switch
@@ -61,6 +64,10 @@ public static class PaperCellDiorama
             var box = LocalBounds(cell, b);
             if (box is { } bb) building = new Rect2(bb.Position.X, bb.Position.Z, bb.Size.X, bb.Size.Z).Grow(r * .05f);
         }
+        // pieces stand on the card's real top (the Everfree terrain is a raised forest floor)
+        var groundY = 0f;
+        var terrainNode = cell.GetNodeOrNull<Node3D>("VisualRoot/CustomVisualRoot/OrigamiAsset/Terrain");
+        if (terrainNode != null && LocalBounds(root, terrainNode) is { } tb) groundY = Math.Max(0, tb.End.Y);
         var placed = new List<(Vector2 P, float R)>();
         var procedural = new SurfaceTool(); procedural.Begin(Mesh.PrimitiveType.Triangles);
         var anyProcedural = false;
@@ -72,7 +79,7 @@ public static class PaperCellDiorama
             {
                 var angle = rng.RandfRange(0, Mathf.Tau);
                 var dist = Mathf.Sqrt(rng.RandfRange(inner * inner, item.Outer * item.Outer)) * r;
-                var p = new Vector3(Mathf.Cos(angle) * dist, item.Y * r, Mathf.Sin(angle) * dist);
+                var p = new Vector3(Mathf.Cos(angle) * dist, item.Y * r + groundY, Mathf.Sin(angle) * dist);
                 if (!InsideHex(p, r * .97f)) continue;
                 var size = item.Size * r * rng.RandfRange(.8f, 1.2f);
                 var flat = new Vector2(p.X, p.Z);
@@ -160,6 +167,51 @@ public static class PaperCellDiorama
             case "@ember":
                 Spire(t, p, size * .4f, size * rng.RandfRange(.9f, 1.4f), Pick(rng, "3f3239", "4a3a42"), 5);
                 break;
+            case "@thorn":
+                // Everfree bramble: a dark, sharply zig-zagging vine with spiral tips and spikes
+                {
+                    var dark = Pick(rng, "1d2a2e", "22343a", "18242a");
+                    var pt = p; var heading = rng.RandfRange(0, Mathf.Tau); var w = size * .055f;
+                    var segs = rng.RandiRange(5, 7);
+                    for (var i = 0; i < segs; i++)
+                    {
+                        heading += (i % 2 == 0 ? 1 : -1) * rng.RandfRange(.9f, 1.6f);
+                        var step = new Vector3(Mathf.Cos(heading) * .45f, rng.RandfRange(.55f, 1.0f), Mathf.Sin(heading) * .45f).Normalized() * size * .42f;
+                        if (i > segs / 2) step.Y *= -.35f;   // arch over and droop like a bramble
+                        var next = pt + step; if (next.Y < p.Y) next.Y = p.Y + r * .01f;
+                        Beam(t, pt, next, w * (1f - i * .1f), dark);
+                        if (i % 2 == 1) Spike(t, (pt + next) * .5f, step.Cross(Vector3.Up).Normalized() * size * .09f + Vector3.Up * size * .03f, w * .8f, dark);
+                        pt = next;
+                    }
+                    for (var k = 0; k < 4; k++)   // curled tip
+                    {
+                        heading += 1.3f; var next = pt + new Vector3(Mathf.Cos(heading), .15f, Mathf.Sin(heading)) * size * .07f * (1 - k * .2f);
+                        Beam(t, pt, next, w * .5f, dark); pt = next;
+                    }
+                }
+                break;
+            case "@shroom":
+                {
+                    var cap = Pick(rng, "e57fd0", "b48cf0", "ff9fd6");
+                    for (var i = 0; i < rng.RandiRange(2, 3); i++)
+                    {
+                        var q = p + new Vector3(rng.RandfRange(-.5f, .5f), 0, rng.RandfRange(-.5f, .5f)) * size; var stem = size * rng.RandfRange(.5f, 1f);
+                        Prism(t, q, rot, size * .06f, size * .06f, stem, new Color("f3ead8"), new Color("f3ead8"), 5);
+                        Mound(t, q + Vector3.Up * stem, size * .26f, size * .18f, cap, 7);
+                    }
+                }
+                break;
+            case "@moss":
+                // shade pools under the canopy: dark teal moss patches give the Everfree its gloom
+                {
+                    // irregular, soft-edged: a darker core inside a ring close to the floor colour
+                    const int n = 11; var rad = new float[n];
+                    for (var i = 0; i < n; i++) rad[i] = size * .5f * rng.RandfRange(.6f, 1.05f);
+                    Vector3 Rim(int i, float k) { var a = Mathf.Tau * (i % n) / n; return p + Vector3.Up * r * .004f + new Vector3(Mathf.Cos(a), 0, Mathf.Sin(a)) * rad[i % n] * k; }
+                    var outer = new Color("2a5232"); var core = Pick(rng, "1f4436", "1d3f34");
+                    for (var i = 0; i < n; i++) { Quad(t, Rim(i, .55f), Rim(i + 1, .55f), Rim(i + 1, 1f), Rim(i, 1f), outer); Tri(t, p + Vector3.Up * r * .005f, Rim(i, .55f), Rim(i + 1, .55f), core); }
+                }
+                break;
             case "@snow":
                 Mound(t, p, size * .5f, size * .22f, new Color("f2f5f8"), 7);
                 break;
@@ -241,6 +293,26 @@ public static class PaperCellDiorama
             Tri(t, c, c + new Vector3(Mathf.Cos(A(i)), 0, Mathf.Sin(A(i))) * radius, c + new Vector3(Mathf.Cos(A(i + 1)), 0, Mathf.Sin(A(i + 1))) * radius, col);
         }
     }
+    private static void Beam(SurfaceTool t, Vector3 a, Vector3 b, float width, Color col)
+    {
+        var d = (b - a).Normalized(); var u = Math.Abs(d.Y) > .9f ? Vector3.Right : Vector3.Up;
+        var s1 = d.Cross(u).Normalized() * width; var s2 = d.Cross(s1).Normalized() * width;
+        Vector3[] o = [s1, s2, -s1, -s2];
+        for (var i = 0; i < 4; i++) { var c1 = o[i]; var c2 = o[(i + 1) % 4]; QuadAny(t, a + c1, b + c1, b + c2, a + c2, i % 2 == 0 ? col : col.Lightened(.08f)); }
+    }
+    private static void Spike(SurfaceTool t, Vector3 at, Vector3 dir, float width, Color col)
+    {
+        var side = dir.Cross(Vector3.Up).Normalized() * width; if (side.LengthSquared() < 1e-8f) side = Vector3.Right * width;
+        TriAny(t, at - side, at + side, at + dir, col); TriAny(t, at - side * .2f + Vector3.Up * width, at + side * .2f - Vector3.Up * width, at + dir, col.Lightened(.06f));
+    }
+    // two-sided triangles for thin vines (no upward flip)
+    private static void TriAny(SurfaceTool t, Vector3 a, Vector3 b, Vector3 c, Color col)
+    {
+        var n = (b - a).Cross(c - a).Normalized();
+        t.SetColor(col.SrgbToLinear()); t.SetNormal(n); t.AddVertex(a); t.AddVertex(c); t.AddVertex(b);
+        t.SetColor(col.SrgbToLinear()); t.SetNormal(-n); t.AddVertex(a); t.AddVertex(b); t.AddVertex(c);
+    }
+    private static void QuadAny(SurfaceTool t, Vector3 a, Vector3 b, Vector3 c, Vector3 d, Color col) { TriAny(t, a, b, c, col); TriAny(t, a, c, d, col); }
     private static void Strip(SurfaceTool t, Vector3 a, Vector3 b, float width, Color col)
     {
         var w = (b - a).Cross(Vector3.Up).Normalized() * width;

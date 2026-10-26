@@ -87,15 +87,29 @@ public partial class RunClaudeSunlitLookDev : SceneTree
                 if (v.Pawns && _cases.TryGetValue("close", out var focus)) PlacePawns(focus.Transform);
                 foreach (var view in v.Views ?? new[] { "overview", "region", "close" })
                 {
+                    // "cell:A10" (or "cell:A10:0.4") = close camera re-aimed at one cell, for landmark review
+                    if (view.StartsWith("cell:") && _cases.TryGetValue("close", out var baseCam))
+                    {
+                        var bits = view.Split(':');
+                        var target = _stage.FindChildren("*", "Node3D", true, false).OfType<HexCell3D>().FirstOrDefault(h => h.Data?.CellCode == bits[1]);
+                        if (target != null)
+                        {
+                            var fwd = -baseCam.Transform.Basis.Z; var t0 = fwd.Y < -.01f ? baseCam.Transform.Origin.Y / -fwd.Y : 0;
+                            var ground = baseCam.Transform.Origin + fwd * t0; var shift = target.GlobalPosition - ground; shift.Y = 0;
+                            _cases[view] = (new Transform3D(baseCam.Transform.Basis, baseCam.Transform.Origin + shift + Vector3.Up * .25f), baseCam.Size * (bits.Length > 2 ? float.Parse(bits[2], CultureInfo.InvariantCulture) : .35f));
+                        }
+                    }
+                    // "widest" = overview camera at the controller's maximum zoom-out (checks the zoom limit)
+                    if (view == "widest" && _cases.TryGetValue("overview", out var ov)) _cases[view] = (ov.Transform, _stage.CameraController.MaximumSize);
                     if (!_cases.TryGetValue(view, out var c)) continue;
                     _panel.Visible = v.Ui;
                     _gallery.FindChild("ArtSettingsButton", true, false)!.Set("visible", v.Ui);
                     _camera.GlobalTransform = c.Transform; _camera.Size = c.Size;
                     PaperSunlitStyle.UpdateHaze(_stage);
-                    await Frames(view.StartsWith("macro") ? 60 : 24);
+                    await Frames(view.StartsWith("macro") || view.StartsWith("cell:") ? 60 : 24);
                     await ToSignal(RenderingServer.Singleton, RenderingServer.SignalName.FramePostDraw);
                     using var im = Root.GetTexture().GetImage();
-                    var name = $"{v.Name}-{view}";
+                    var name = $"{v.Name}-{view.Replace(':', '_')}";
                     var path = $"{OutDir}/{name}.png";
                     im.SavePng(ProjectSettings.GlobalizePath(path));
                     _report.Add(Stats(name, v, im, path));

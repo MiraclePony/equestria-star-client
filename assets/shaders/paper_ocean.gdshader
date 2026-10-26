@@ -21,6 +21,6 @@ void fragment(){
     float wave=smoothstep(.975,.997,band)*broken;
     c=mix(c,mix(vec3(.68,.81,.78),vec3(.95,.92,.80),sun_mix),wave*mix(.21,.34,sun_mix)*paper_motion);
     // P9 widest zoom: the sea steps back with the rest of the exterior
-    float l=dot(c,vec3(.2126,.7152,.0722));c=mix(c,mix(vec3(l),c,.45)*.85+vec3(.70,.74,.74)*.15,clamp(paper_overview,0.0,1.0)*.55*sun_mix);
+    float l=dot(c,vec3(.2126,.7152,.0722));c=mix(c,mix(vec3(l),c,.45)*.85+vec3(.70,.74,.74)*.15,clamp(paper_overview,0.0,1.0)*.25*sun_mix);
     ALBEDO=c;ROUGHNESS=1.0;
 }

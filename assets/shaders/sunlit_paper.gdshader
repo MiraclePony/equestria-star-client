@@ -249,7 +249,7 @@ void fragment() {
     if (scenery && paper_overview > 0.0) {
         float l = dot(color, vec3(0.2126, 0.7152, 0.0722));
         vec3 muted = mix(vec3(l), color, 0.35) * 0.8 + vec3(0.78, 0.76, 0.70) * 0.2;
-        color = mix(color, muted, clamp(paper_overview, 0.0, 1.0) * 0.6);
+        color = mix(color, muted, clamp(paper_overview, 0.0, 1.0) * 0.28);
     }
     NORMAL = normalize((VIEW_MATRIX * vec4(n_world, 0.0)).xyz);
     ALBEDO = color;

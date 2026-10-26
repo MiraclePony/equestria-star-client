@@ -16,7 +16,7 @@ public partial class RunOrigamiArtTests : SceneTree
         try
         {
             var entries=OrigamiArtCatalog.Entries;
-            Check(entries.Count==43,"43 current asset entries must load");
+            Check(entries.Count==44,"44 current asset entries must load (43 + town-hall, 2026-10-26)");
             var cellScene=GD.Load<PackedScene>("res://scenes/game/map/HexCell3D.tscn");
             foreach(var entry in entries)
             {

@@ -1,4 +1,4 @@
-param([string]$GodotPath = '', [switch]$SkipBuild, [int]$View = 50, [ValidateSet('Mobile','Desktop','Compatibility')][string]$Quality = 'Desktop', [switch]$Photo, [string]$FocusCell = '', [float]$DetailScale = 0,[ValidateRange(0,6)][int]$PaperPreset=5,[switch]$Reduced)
+﻿param([string]$GodotPath = '', [switch]$SkipBuild, [int]$View = 50, [ValidateSet('Mobile','Desktop','Compatibility')][string]$Quality = 'Desktop', [switch]$Photo, [string]$FocusCell = '', [float]$DetailScale = 0,[ValidateRange(0,9)][int]$PaperPreset=5,[switch]$Reduced,[switch]$Pawns)
 $ErrorActionPreference='Stop'
 Set-Location -LiteralPath $PSScriptRoot
 if (-not $GodotPath) {
@@ -15,6 +15,7 @@ if (-not $SkipBuild) {
 $renderMethod=switch($Quality) {'Desktop' {'forward_plus'} 'Compatibility' {'gl_compatibility'} default {'mobile'}}
 $artArgs=@('--art-view',"$View",'--paper-preset',"$PaperPreset")
 if($Reduced){$artArgs+='--paper-reduced'}
+if($Pawns){$artArgs+='--art-pawns'}
 if ($Quality -eq 'Desktop') { $artArgs+='--art-quality' }
 if ($Photo) { $artArgs+='--art-diorama' }
 if ($FocusCell) { $artArgs+=@('--art-focus',$FocusCell) }

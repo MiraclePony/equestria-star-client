@@ -387,7 +387,9 @@ public partial class MapCameraController : Node3D
     {
         var fitPlan = MapCameraFitter.Calculate(_mapBounds, aspect);
         _minimumSize = Math.Max(0.001f, fitPlan.OrthographicSize * Mathf.Clamp(MinZoomRatio, 0.05f, 0.95f));
-        _maximumSize = Math.Max(_minimumSize, fitPlan.OrthographicSize * Math.Max(1.0f, MaxZoomRatio));
+        // P9: the widest view stops at the fitted continent instead of drifting out over open sea.
+        var maxRatio = EquestriaStar.Art.ArtRenderProfile.IsSunlit ? Math.Min(MaxZoomRatio, 0.92f) : MaxZoomRatio;
+        _maximumSize = Math.Max(_minimumSize, fitPlan.OrthographicSize * Math.Max(0.5f, maxRatio));
     }
 
     private void UpdatePanBounds(float size)

@@ -14,7 +14,7 @@ public static class OrigamiMapPresentation
     private static readonly Dictionary<string, float> Yaws = new()
     {
         ["sugarcube"] = -60, ["sweet-apple-acres"] = 60, ["fluttershy"] = 60,
-        ["fashion-shop"] = -60, ["rainbow-house"] = 60, ["twilight-castle"] = 0,
+        ["fashion-shop"] = -60, ["town-hall"] = 0, ["rainbow-house"] = 60, ["twilight-castle"] = 0,
         ["friendship-school"] = 60, ["ponyville-market"] = -60, ["old-castle"] = 60,
         ["zecora"] = -60, ["harmony-tree"] = 120, ["crystal-castle"] = 60,
         ["crystal-empire"] = -60, ["crystal-stadium"] = 60, ["yakyakistan"] = -60,

@@ -30,7 +30,7 @@ public static class PaperSunlitStyle
     /// <summary>Concept-matched printed paper colours per board (sRGB). Only used by preset 9.</summary>
     public static readonly IReadOnlyDictionary<string, Color> Regions = new Dictionary<string, Color>
     {
-        ["A"] = new("a7bf6a"), ["B"] = new("315a1b"), ["C"] = new("aca0e0"), ["D"] = new("c8aa64"),
+        ["A"] = new("a7bf6a"), ["B"] = new("2d5628"), ["C"] = new("aca0e0"), ["D"] = new("c8aa64"),
         ["E"] = new("cec7bf"), ["F"] = new("bd95af"), ["G"] = new("ba7d6d"), ["H"] = new("daa066"),
         ["I"] = new("b3bdc1"), ["J"] = new("dcab60"), ["K"] = new("6cb692"), ["L"] = new("94cedb"),
     };
@@ -40,8 +40,8 @@ public static class PaperSunlitStyle
         // Key light: warm, a little lower than V5 so paper creases and card rims read.
         public float SunPitch = -56f;
         public float SunYaw = -38f;
-        public float SunEnergy = 1.75f;
-        public Color SunColor = new("fff1dc");
+        public float SunEnergy = 1.85f;
+        public Color SunColor = new("ffe7bf");
         // Opposite-side sky fill from ABOVE (the legacy bounce pointed upward and did nothing).
         public float FillPitch = -55f;
         public float FillYaw = 150f;
@@ -81,10 +81,10 @@ public static class PaperSunlitStyle
         public float HazeSkyAffect = 0.0f;
         // Glow: only bright paper and sparkles, soft-light so it brightens without washing out.
         public bool Glow = true;
-        public float GlowIntensity = 0.55f;
+        public float GlowIntensity = 0.65f;
         public float GlowStrength = 1.05f;
         public float GlowBloom = 0.04f;
-        public float GlowThreshold = 0.92f;
+        public float GlowThreshold = 0.85f;
 
         // Material (sunlit_paper.gdshader)
         public float CrumpleTop = 0.30f;
@@ -98,16 +98,16 @@ public static class PaperSunlitStyle
         public Color RimColor = new("fbf2dc");
         public float RimCrease = 0.0f;
         public float SideTint = 0.85f;
-        public float AlbedoSaturation = 1.0f;
+        public float AlbedoSaturation = 1.03f;
         public float AlbedoLift = 0.0f;
-        public float PropSaturation = 0.96f;
+        public float PropSaturation = 1.04f;
         public float PropLift = 0.03f;
         public float Wrap = 0.30f;
         public float BandLo = 0.16f;
         public float BandHi = 0.80f;
         public float Grad = 0.50f;
         public float ShadeFloor = 0.10f;
-        public Color ShadeTint = new("b4c0ff");
+        public Color ShadeTint = new("a8a0ff");
         public float ShadeTintMix = 0.55f;
         public float Sheen = 0.10f;
         public Color SeamColor = new("f6eed8");
@@ -125,13 +125,13 @@ public static class PaperSunlitStyle
 
         // Final LDR grade (paper_grade.gdshader, sunlit branch)
         public float GradeStrength = 1.0f;
-        public Vector3 WhiteBalance = new(1.0f, 1.0f, 0.98f);
-        public float GradeSaturation = 1.30f;
+        public Vector3 WhiteBalance = new(1.025f, 1.0f, 0.95f);
+        public float GradeSaturation = 1.32f;
         public float CyanDesaturate = 0.08f;
-        public float GradeContrast = 0.30f;
+        public float GradeContrast = 0.38f;
         public float ShadeLift = 0.0f;
         public Color ShadeColor = new("6a5a8c");
-        public float LeakStrength = 0.16f;
+        public float LeakStrength = 0.20f;
         public Color LeakColor = new("ffd89a");
         public Vector2 LeakCentre = new(-0.05f, -0.10f);
         public float LeakRadius = 0.95f;
@@ -163,8 +163,8 @@ public static class PaperSunlitStyle
     /// </summary>
     private static readonly (string Prefix, string[] Colors)[] ForestPaper =
     [
-        ("MAT_Paper_EverfreeCanopy", ["2c7046", "347a4d", "27673f", "3b8253"]),
-        ("MAT_Paper_EverfreeBark", ["6a5242", "5e4a3c", "735a47", "64503f"]),
+        ("MAT_Paper_EverfreeCanopy", ["4f6b2a", "3d6a4a", "5a7430", "2f5f4f"]),
+        ("MAT_Paper_EverfreeBark", ["2f2a33", "3a3038", "28252e", "352c35"]),
         ("MAT_Paper_Fern", ["4f9a4c", "5aa553", "478f46", "62ab5a"]),
         ("MAT_Paper_ForestMoss", ["5c9a48", "68a64f"]),
     ];

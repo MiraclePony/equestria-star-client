@@ -197,6 +197,13 @@ public partial class OrigamiGallery : Node3D
             if (!result.Ok) { _description.Text = result.Error; return; }
             if(EnvironmentMotion is {} movement){movement.Reduced=_reducedMotion;movement.HaloEnabled=_haloEnabled;movement.RestoreState(previousTime,_animationsEnabled,_motionFrozen,previousWeight);}
             foreach (var cell in _builder.CellsById.Values) WireCell(cell);
+            // Review only (P9): a few placeholder pawns so the overview pins and close dioramas can be judged.
+            if(ArtRenderProfile.IsSunlit && OS.GetCmdlineUserArgs().Contains("--art-pawns"))
+            {
+                var cells=_builder.CellsByCode;
+                foreach(var (code,player,slot,count) in new[]{("A16",0,0,1),("A15",1,0,3),("A15",2,1,3),("A15",3,2,3),("B6",1,0,1),("K4",3,0,1),("F4",2,0,1),("H3",0,0,1),("C5",2,0,1)})
+                    if(cells.TryGetValue(code,out var target))PaperPawnPlaceholder.Place(target,player,slot,count);
+            }
             _stage.CameraController.InitializeMap(result.Bounds);
             if(_comparison && selection==1)
             {
