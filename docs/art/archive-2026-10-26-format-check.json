@@ -1,6 +1,6 @@
 {
   "status": "compatibility-check-passed-with-existing-gaps",
-  "atUtc": "2026-10-26T07:53:40.152601+00:00",
+  "atUtc": "2026-10-26T15:06:28.053583+00:00",
   "checks": [
     {
       "name": "Original document: 小马国之星前端重构需求与后端接口交接文档.md",
@@ -120,7 +120,7 @@
     {
       "name": "UTF8 resource/source texts",
       "passed": true,
-      "detail": "824 text files decoded strictly as UTF8."
+      "detail": "839 text files decoded strictly as UTF8."
     },
     {
       "name": "Strict JSON resource files",
@@ -130,7 +130,7 @@
     {
       "name": "Scene/resource paths and case",
       "passed": true,
-      "detail": "454 explicit scene/tres res:// paths checked, including exact case."
+      "detail": "456 explicit scene/tres res:// paths checked, including exact case."
     },
     {
       "name": "Godot partial class/filename convention",
