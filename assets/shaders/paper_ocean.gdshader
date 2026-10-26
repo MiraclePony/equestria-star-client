@@ -2,6 +2,7 @@ shader_type spatial;
 render_mode unshaded, specular_disabled, shadows_disabled, cull_disabled;
 global uniform float paper_clock;
 global uniform float paper_motion;
+global uniform float paper_overview;
 uniform vec2 map_centre;
 uniform float hex_diameter=1.1;
 // Preset 9 sunlit sea (Claude): 0 keeps V5 byte-identical.
@@ -19,5 +20,7 @@ void fragment(){
     float broken=smoothstep(.15,.8,sin(p.x*.75+p.y*.13));
     float wave=smoothstep(.975,.997,band)*broken;
     c=mix(c,mix(vec3(.68,.81,.78),vec3(.95,.92,.80),sun_mix),wave*mix(.21,.34,sun_mix)*paper_motion);
+    // P9 widest zoom: the sea steps back with the rest of the exterior
+    float l=dot(c,vec3(.2126,.7152,.0722));c=mix(c,mix(vec3(l),c,.45)*.85+vec3(.70,.74,.74)*.15,clamp(paper_overview,0.0,1.0)*.55*sun_mix);
     ALBEDO=c;ROUGHNESS=1.0;
 }

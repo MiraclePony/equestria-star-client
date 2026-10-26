@@ -54,6 +54,7 @@ public static class PaperWorldBackground
             var kind=ids.Contains("dragon-lands")?"volcanic":ids.Contains("appleloosa")||ids.Contains("baltimare")?"dry":ids.Contains("yakyakistan")||ids.Contains("crystal-castle")?"snow":ids.Contains("canterlot")?"city-cliff":ids.Contains("manehattan-district")?"city-coast":ids.Contains("hippogriff")?"island":region.Key=="B"?"everfree":"meadow";
             if(ArtRenderProfile.IsSunlit && ids.Contains("baltimare") && !ids.Contains("appleloosa"))kind="city-coast";   // Baltimare is a harbour, not desert
             if(kind=="meadow" && region.Key!="A")continue;
+            if(ArtRenderProfile.IsSunlit && kind=="island")continue;   // P9: the Hippogriff sea (AddThemedSurroundings) replaces the grey shelf
             var cluster=region.Aggregate(Vector3.Zero,(sum,c)=>sum+c.Position)/region.Count();
             var dir=new Vector3(cluster.X-centre.X,0,cluster.Z-centre.Y).Normalized();if(dir.LengthSquared()<.1f)dir=Vector3.Back;
             var side=new Vector3(dir.Z,0,-dir.X);var angle=Mathf.Atan2(dir.Z,dir.X);if(angle<0)angle+=Mathf.Tau;
@@ -227,12 +228,25 @@ public static class PaperWorldBackground
     /// with low mesas (west), a ring of purple-red badlands around an ochre basin (middle) and a
     /// dark jungle edge (east). Everything stays low so the board keeps the eye.
     /// </summary>
+    /// <summary>Open sea outward of the Hippogriff board (I): the southern land leaves it as water.</summary>
+    private static (Vector3 Centre,float Radius,Vector3 Out)? HippogriffSea(IReadOnlyCollection<HexCell3D> cells,Vector2 centre,float r)
+    {
+        var g=cells.Where(c=>c.Data!.BoardCode=="I").ToArray();if(g.Length==0)return null;
+        var cl=g.Aggregate(Vector3.Zero,(a,c)=>a+c.Position)/g.Length;
+        var o=new Vector3(cl.X-centre.X,0,cl.Z-centre.Y).Normalized();
+        var edge=g.Max(c=>(c.Position-cl).Dot(o));
+        var at=cl+o*(edge+r*4.3f);at.Y=0;
+        return (at,r*4.0f,o);
+    }
+
     private static void AddSouthernLands(Node3D root,IReadOnlyCollection<HexCell3D> cells,Aabb bounds,float r,
         Action<Vector3,Vector3,Vector3,Color> tri,Action<Vector3,Vector3,float,float,float,Color,bool> ridge)
     {
         var rng=new RandomNumberGenerator {Seed=1867};
         bool NearCell(Vector3 p,float d)=>cells.Any(c=>new Vector2(c.Position.X-p.X,c.Position.Z-p.Z).Length()<d);
         var west=bounds.Position.X-r*6;var east=bounds.End.X+r*4;
+        var sea=HippogriffSea(cells,new Vector2(bounds.GetCenter().X,bounds.GetCenter().Z),r);
+        bool InSea(Vector3 p,float pad=0)=>sea is {} s0 && new Vector2(p.X-s0.Centre.X,p.Z-s0.Centre.Z).Length()<s0.Radius+pad;
         var start=bounds.End.Z-bounds.Size.Z*.22f;var far=bounds.End.Z+r*13;var y=-r*.27f;
         var sand=new Color("e2c27c");var badland=new Color("6e5660");var jungle=new Color("3f7a3d");var meadow=new Color("4f8342");
         // Anchors from the board itself: the desert belongs to Appleloosa's board (J), the badland
@@ -254,6 +268,7 @@ public static class PaperWorldBackground
             {
                 Vector3 G(int a,int b){var z=Mathf.Lerp(start,far,b/(float)rows);var l=west+Edge(z,-1);var rr=east+Edge(z,1);return new Vector3(Mathf.Lerp(l,rr,a/(float)cols),y,z);}
                 var p00=G(i,j);var p10=G(i+1,j);var p01=G(i,j+1);var p11=G(i+1,j+1);
+                if(InSea((p00+p11)*.5f,-r*.35f))continue;   // the Hippogriff coast: open water here
                 var c=Ground((p00.X+p11.X)*.5f,(p00.Z+p11.Z)*.5f);
                 tri(p00,p10,p11,c.Lightened(rng.RandfRange(0,.05f)));tri(p00,p11,p01,c.Darkened(rng.RandfRange(0,.05f)));
                 // sloping coast into the sea on both sides
@@ -261,6 +276,17 @@ public static class PaperWorldBackground
                 if(i==0){var d=new Vector3(-r*1.2f,-r*.58f,0);tri(p00,p01,p01+d,beach);tri(p00,p01+d,p00+d,beach.Darkened(.04f));}
                 if(i==cols-1){var d=new Vector3(r*1.2f,-r*.58f,0);tri(p10,p11,p11+d,beach);tri(p10,p11+d,p10+d,beach.Darkened(.04f));}
             }
+        // Sandy shore sloping from the land down into the Hippogriff sea.
+        if(sea is {} s1)
+        {
+            const int n=28;var beach=new Color("e0cf98");
+            for(var i=0;i<n;i++)
+            {
+                Vector3 Ring(int k,float rad,float yy){var t=k*Mathf.Tau/n;return s1.Centre+new Vector3(Mathf.Cos(t),0,Mathf.Sin(t))*rad+Vector3.Up*yy;}
+                tri(Ring(i,s1.Radius,y),Ring(i+1,s1.Radius,y),Ring(i+1,s1.Radius-r*1.3f,-r*.86f),i%2==0?beach:beach.Darkened(.04f));
+                tri(Ring(i,s1.Radius,y),Ring(i+1,s1.Radius-r*1.3f,-r*.86f),Ring(i,s1.Radius-r*1.3f,-r*.86f),i%2==0?beach:beach.Darkened(.04f));
+            }
+        }
         // Flat-topped paper prism: mesa / butte.
         void Mesa(Vector3 p,float radius,float height,Color color)
         {
@@ -279,7 +305,7 @@ public static class PaperWorldBackground
         for(var k=0;k<26 && desert!=null;k++)
         {
             var p=desert.Value+new Vector3(rng.RandfRange(-3.4f,3.4f),0,rng.RandfRange(-2.6f,2.6f))*r;p.Y=y;
-            if(NearCell(p,r*2.4f) || Near(desert,p.X,p.Z,r*5.4f)<.6f)continue;
+            if(NearCell(p,r*2.4f) || InSea(p,r*.6f) || Near(desert,p.X,p.Z,r*5.4f)<.6f)continue;
             if(k%3==0)Mesa(p,r*rng.RandfRange(.35f,.7f),r*rng.RandfRange(.22f,.5f),new Color(k%2==0?"c9794a":"d08a52"));
             else ridge(p,Vector3.Forward.Rotated(Vector3.Up,rng.RandfRange(-.4f,.4f)),r*rng.RandfRange(.9f,1.5f),r*rng.RandfRange(.25f,.4f),r*rng.RandfRange(.08f,.16f),sand.Lightened(.06f),false);
         }
@@ -303,16 +329,36 @@ public static class PaperWorldBackground
                 var a1=a0+new Vector3(Mathf.Cos(t)*1.25f,0,Mathf.Sin(t))*r*1.5f;var w=(a1-a0).Cross(Vector3.Up).Normalized()*r*.07f;
                 tri(a0-w,a0+w,a1,lava);
             }
-            Mesa(basin+new Vector3(r*.9f,0,-r*.4f),r*.55f,r*.42f,new Color("4a3a42"));
-            var crater=basin+new Vector3(r*.9f,r*.425f,-r*.4f);
-            for(var i=0;i<6;i++){var t0=i*Mathf.Tau/6;var t1=(i+1)*Mathf.Tau/6;tri(crater,crater+new Vector3(Mathf.Cos(t0),0,Mathf.Sin(t0))*r*.22f,crater+new Vector3(Mathf.Cos(t1),0,Mathf.Sin(t1))*r*.22f,lava);}
+            void Volcano(Vector3 p,float radius,float height)
+            {
+                const int n=9;var top=radius*.3f;
+                for(var i=0;i<n;i++)
+                {
+                    var t0=i*Mathf.Tau/n;var t1=(i+1)*Mathf.Tau/n;
+                    Vector3 B(float t)=>p+new Vector3(Mathf.Cos(t),0,Mathf.Sin(t))*radius*(i%2==0?1.05f:.95f);
+                    Vector3 T(float t)=>p+new Vector3(Mathf.Cos(t),0,Mathf.Sin(t))*top+Vector3.Up*height;
+                    var rock=new Color(i%3==0?"4a3a42":i%3==1?"584650":"3f3239");
+                    tri(B(t0),B(t1),T(t1),rock);tri(B(t0),T(t1),T(t0),rock.Lightened(.05f));
+                }
+                var crater=p+Vector3.Up*(height-r*.02f);
+                for(var i=0;i<n;i++){var t0=i*Mathf.Tau/n;var t1=(i+1)*Mathf.Tau/n;tri(crater,crater+new Vector3(Mathf.Cos(t0),0,Mathf.Sin(t0))*top*.95f,crater+new Vector3(Mathf.Cos(t1),0,Mathf.Sin(t1))*top*.95f,lava);}
+                // a lava tongue down the camera-facing flank
+                var lip=p+new Vector3(.25f,0,1).Normalized()*top+Vector3.Up*height;var foot=p+new Vector3(.4f,0,1).Normalized()*radius*1.15f+Vector3.Up*r*.01f;
+                var w=(foot-lip).Cross(Vector3.Up).Normalized()*r*.06f;
+                tri(lip-w*.6f,lip+w*.6f,foot+w,lava);tri(lip-w*.6f,foot+w,foot-w,lava.Darkened(.08f));
+                var steam=EnvironmentArtCatalog.Place(root,"BG105",p+Vector3.Up*(height+r*.35f),r*.22f*radius/(r*.7f),rng.RandfRange(0,360));
+                if(steam!=null)foreach(var m in steam.FindChildren("*","GeometryInstance3D",true,false).OfType<GeometryInstance3D>())m.CastShadow=GeometryInstance3D.ShadowCastingSetting.Off;
+            }
+            Volcano(basin+new Vector3(r*.4f,0,-r*.2f),r*.85f,r*.9f);
+            Volcano(basin+new Vector3(-r*1.5f,0,r*.5f),r*.55f,r*.55f);
+            Volcano(basin+new Vector3(r*2.0f,0,r*.7f),r*.5f,r*.5f);
         }
         // Meadow woods between the features, so the southern plain is not an empty sheet.
         string[] pines=EnvironmentArtCatalog.Entries.ContainsKey("VEG002")?["VEG002","VEG001"]:["VEG003"];
         for(var k=0;k<10;k++)
         {
             var c=new Vector3(rng.RandfRange(west+r,Mathf.Lerp(west,east,.74f)),y+r*.006f,rng.RandfRange(start+r*2,far-r*2));
-            if(NearCell(c,r*3f) || Near(desert,c.X,c.Z,r*5.4f)>.1f || Near(basinAt,c.X,c.Z,r*3.6f)>.1f)continue;
+            if(NearCell(c,r*3f) || InSea(c,r*2f) || Near(desert,c.X,c.Z,r*5.4f)>.1f || Near(basinAt,c.X,c.Z,r*3.6f)>.1f)continue;
             var size=r*rng.RandfRange(1.0f,1.9f);var ring=new Vector3[8];
             for(var i=0;i<8;i++){var t=i*Mathf.Tau/8;ring[i]=c+new Vector3(Mathf.Cos(t),0,Mathf.Sin(t)*.7f)*size*rng.RandfRange(.75f,1.1f);}
             for(var i=0;i<8;i++)tri(c,ring[i],ring[(i+1)%8],new Color(k%2==0?"356f3c":"2f6837"));
@@ -329,7 +375,7 @@ public static class PaperWorldBackground
         for(var k=0;k<5;k++)
         {
             var c=new Vector3(rng.RandfRange(Mathf.Lerp(west,east,.78f),east),y+r*.006f,rng.RandfRange(start+r,far-r*2));
-            if(NearCell(c,r*2.8f))continue;
+            if(NearCell(c,r*2.8f) || InSea(c,r*2f))continue;
             var size=r*rng.RandfRange(1.0f,1.8f);var ring=new Vector3[8];
             for(var i=0;i<8;i++){var t=i*Mathf.Tau/8;ring[i]=c+new Vector3(Mathf.Cos(t),0,Mathf.Sin(t)*.75f)*size*rng.RandfRange(.75f,1.1f);}
             for(var i=0;i<8;i++)tri(c,ring[i],ring[(i+1)%8],new Color("2f6534"));
@@ -489,20 +535,21 @@ public static class PaperWorldBackground
                 Quad(a-o*.3f+Vector3.Up*r*.003f,b-o*.3f+Vector3.Up*r*.003f,b+o*.3f+Vector3.Up*r*.003f,a+o*.3f+Vector3.Up*r*.003f,new Color("d2433f"));
             }
         }
-        // I  Hippogriff kingdom: a sea bay with rock-spire islands (Mt. Aris).
-        if(Anchor("I",r*2.8f) is var (iAt,iOut,iSide))
+        // I  Hippogriff kingdom: open coast and sea with Mt. Aris and rock-spire islands standing in the water.
+        if(HippogriffSea(cells,centre,r) is var (seaAt,seaR,seaOut))
         {
-            var bay=iAt+iOut*r*1.2f+Vector3.Up*r*.03f;
-            Disc(bay,r*3.2f,new Color("e2d6a6"),14,.75f);
-            Disc(bay+Vector3.Up*r*.004f,r*2.85f,new Color("3f9aa8"),14,.75f);
-            Disc(bay+Vector3.Up*r*.008f,r*1.6f,new Color("5bb3bd"),12,.75f);
-            Disc(bay+iSide*r*.2f+Vector3.Up*r*.012f,r*.65f,new Color("8fb07a"),8,.8f);
-            ridge(bay+iSide*r*.2f,iOut,r*.42f,r*.36f,r*1.5f,new Color("7f8f8a"),true);   // Mt. Aris
-            for(var i=0;i<5;i++)
+            var seaY=-r*.82f;var side=new Vector3(seaOut.Z,0,-seaOut.X);
+            void Island(Vector3 p,float size,float height,bool snow)
             {
-                var t=i*Mathf.Tau/5+.4f;var p=bay+(iSide*Mathf.Cos(t)+iOut*Mathf.Sin(t)*.7f)*r*rng.RandfRange(1.4f,2.1f);
-                Disc(p+Vector3.Up*r*.012f,r*.32f,new Color("9cb784"),7,.8f);
-                ridge(p,iOut,r*.22f,r*.2f,r*rng.RandfRange(.35f,.7f),new Color(i%2==0?"8d9a8f":"98a596"),false);
+                p.Y=seaY;Disc(p+Vector3.Up*r*.02f,size*1.25f,new Color("e3d39c"),8,.85f);
+                Disc(p+Vector3.Up*r*.05f,size,new Color("8fb07a"),8,.85f);
+                ridge(p+Vector3.Up*r*.05f,seaOut,size*.65f,size*.55f,height,new Color("7f8f8a"),snow);
+            }
+            Island(seaAt-seaOut*r*.6f,r*.7f,r*2.0f,true);   // Mt. Aris
+            for(var i=0;i<6;i++)
+            {
+                var t=i*Mathf.Tau/6+.3f;var p=seaAt-seaOut*r*.6f+(side*Mathf.Cos(t)+seaOut*Mathf.Sin(t)*.8f)*r*rng.RandfRange(1.8f,2.8f);
+                Island(p,r*rng.RandfRange(.28f,.42f),r*rng.RandfRange(.6f,1.1f),false);
             }
         }
         // Rainbow arc beside Rainbow Falls (K).

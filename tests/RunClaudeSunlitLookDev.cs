@@ -38,6 +38,7 @@ public partial class RunClaudeSunlitLookDev : SceneTree
         public bool Grade { get; set; } = true;
         public string[]? Views { get; set; }
         public bool Ui { get; set; }
+        public bool Pawns { get; set; }
         public Dictionary<string, JsonElement>? Set { get; set; }
     }
 
@@ -52,6 +53,8 @@ public partial class RunClaudeSunlitLookDev : SceneTree
                     Vector3 P(string k) { var a = c.GetProperty(k).EnumerateArray().Select(v => v.GetSingle()).ToArray(); return new Vector3(a[0], a[1], a[2]); }
                     _cases[c.GetProperty("view").GetString()!] = (new Transform3D(new Basis(P("x"), P("y"), P("z")), P("origin")), c.GetProperty("size").GetSingle());
                 }
+            // Closer than the shared "close" camera: the strategy-map zoom tier where cells get dioramas.
+            if (_cases.TryGetValue("close", out var close)) { _cases["macro"] = (close.Transform, close.Size * .5f); _cases["macro2"] = (close.Transform.Translated(new Vector3(-1.2f, 0, .9f)), close.Size * .38f); }
             System.IO.Directory.CreateDirectory(ProjectSettings.GlobalizePath(OutDir));
             var variantsPath = OutDir + "/variants.json";
             var variants = FileAccess.FileExists(variantsPath)
@@ -81,6 +84,7 @@ public partial class RunClaudeSunlitLookDev : SceneTree
                 _gallery.EnvironmentMotion!.Frozen = true;
                 _gallery.EnvironmentMotion!.SetClock(2.25);
                 await Frames(30);
+                if (v.Pawns && _cases.TryGetValue("close", out var focus)) PlacePawns(focus.Transform);
                 foreach (var view in v.Views ?? new[] { "overview", "region", "close" })
                 {
                     if (!_cases.TryGetValue(view, out var c)) continue;
@@ -88,7 +92,7 @@ public partial class RunClaudeSunlitLookDev : SceneTree
                     _gallery.FindChild("ArtSettingsButton", true, false)!.Set("visible", v.Ui);
                     _camera.GlobalTransform = c.Transform; _camera.Size = c.Size;
                     PaperSunlitStyle.UpdateHaze(_stage);
-                    await Frames(24);
+                    await Frames(view.StartsWith("macro") ? 60 : 24);
                     await ToSignal(RenderingServer.Singleton, RenderingServer.SignalName.FramePostDraw);
                     using var im = Root.GetTexture().GetImage();
                     var name = $"{v.Name}-{view}";
@@ -105,6 +109,21 @@ public partial class RunClaudeSunlitLookDev : SceneTree
             file.StoreString(JsonSerializer.Serialize(new { renderer = RenderingServer.GetCurrentRenderingMethod(), device = RenderingServer.GetVideoAdapterName(), time = DateTime.Now.ToString("O"), shots = _report }, new JsonSerializerOptions { WriteIndented = true }));
         GD.Print("SUN_LOOKDEV_DONE");
         _gallery.FinishInspection(0);
+    }
+
+    /// <summary>Placeholder pawns on the cells nearest the close camera's ground focus (lookdev only).</summary>
+    private void PlacePawns(Transform3D view)
+    {
+        var forward = -view.Basis.Z; var t = forward.Y < -.01f ? view.Origin.Y / -forward.Y : 0;
+        var focus = view.Origin + forward * t;
+        var cells = _stage.FindChildren("*", "Node3D", true, false).OfType<HexCell3D>()
+            .OrderBy(c => new Vector2(c.GlobalPosition.X - focus.X, c.GlobalPosition.Z - focus.Z).Length()).Take(5).ToArray();
+        int[] counts = [1, 2, 1, 3, 1];
+        for (var i = 0; i < cells.Length; i++)
+            for (var k = 0; k < counts[i]; k++) PaperPawnPlaceholder.Place(cells[i], (i + k) % 4, k, counts[i]);
+        // and a few pawns spread over the board, for the overview tier
+        var all = _stage.FindChildren("*", "Node3D", true, false).OfType<HexCell3D>().OrderBy(c => c.Data!.CellCode).ToArray();
+        for (var i = 0; i < 4; i++) PaperPawnPlaceholder.Place(all[(i * 37 + 11) % all.Length], i);
     }
 
     /// <summary>Apply {"Field": value} overrides onto Settings by reflection (float, bool, Color hex, Vector2/3 arrays, enum name).</summary>

@@ -28,6 +28,8 @@ uniform float grain_strength = 0.0;
 uniform float detail_fade = 1.0;
 global uniform float paper_clock;
 global uniform float paper_motion;
+global uniform float paper_overview;   // 1 at the widest zoom: exterior scenery steps back
+uniform bool scenery = false;          // exterior world (not board cells, landmarks or pawns)
 uniform float water_flow = 0.0;
 
 // --- crumpled paper (RG slope, B crease cavity, A height; linear data) ---
@@ -243,6 +245,12 @@ void fragment() {
     color = max(mix(vec3(luma), color, albedo_saturation), vec3(0.0));
     color = mix(color, vec3(1.0), albedo_lift * (1.0 - luma));
 
+    // Widest zoom: the world outside the board fades toward muted paper so pawns and cells lead.
+    if (scenery && paper_overview > 0.0) {
+        float l = dot(color, vec3(0.2126, 0.7152, 0.0722));
+        vec3 muted = mix(vec3(l), color, 0.35) * 0.8 + vec3(0.78, 0.76, 0.70) * 0.2;
+        color = mix(color, muted, clamp(paper_overview, 0.0, 1.0) * 0.6);
+    }
     NORMAL = normalize((VIEW_MATRIX * vec4(n_world, 0.0)).xyz);
     ALBEDO = color;
     ROUGHNESS = 0.9;

@@ -150,7 +150,7 @@ public sealed class GameMapBuilder
         {
             bounds = OrigamiMapPresentation.AddContinent(newRoot, _cellsById.Values.ToArray(), bounds, safeRadius,_edges);
             var scenery=newRoot.GetNodeOrNull<Node3D>("ContinentalScenery");
-            if(scenery!=null)EquestriaStar.Art.ConceptPaperStyle.Apply(scenery);
+            if(scenery!=null)EquestriaStar.Art.ConceptPaperStyle.Apply(scenery,scenery:true);
             if(EquestriaStar.Art.ArtRenderProfile.IsFairy)EquestriaStar.Art.PaperPlaceComposition.Build(newRoot,_cellsById.Values.ToArray());
             var environmentMotion=new EquestriaStar.Art.PaperEnvironmentMotion {Name="PaperEnvironmentMotion"};newRoot.AddChild(environmentMotion);
             environmentMotion.Configure(mapRoot,_cellsById.Values.ToArray(),detailCamera);

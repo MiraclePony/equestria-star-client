@@ -113,7 +113,7 @@ public static class ConceptPaperStyle
         if(!Materials.TryGetValue(key,out var material)){material=Create(Regions[board],true,board);Materials[key]=material;}
         return material;
     }
-    public static void Apply(Node node,bool terrain=false,string board="")
+    public static void Apply(Node node,bool terrain=false,string board="",bool scenery=false)
     {
         if(node is MeshInstance3D mesh && mesh.Mesh!=null)
             for(var i=0;i<mesh.Mesh.GetSurfaceCount();i++)
@@ -124,16 +124,17 @@ public static class ConceptPaperStyle
                 // Transparent printed inks retain the original blend/scissor path and UVs.
                 if(source.Transparency!=BaseMaterial3D.TransparencyEnum.Disabled)continue;
                 var flowing=source.ResourceName.ToString() is "Water" or "Papercard_Pond"?1:mesh.Name.ToString().Contains("ContinuousRainbowAndPool")?2:0;
-                var key=(EquestriaStar.Game.Map.PaperWorldBackground.Enabled?"world5:":"world4:")+(LegacyMaterialForInspection?"legacy:":"")+StyleKey+(terrain?"ground:"+board:$"paper:{source.GetInstanceId()}:{flowing}");
+                var key=(EquestriaStar.Game.Map.PaperWorldBackground.Enabled?"world5:":"world4:")+(LegacyMaterialForInspection?"legacy:":"")+StyleKey+(scenery && SunActive?"scn:":"")+(terrain?"ground:"+board:$"paper:{source.GetInstanceId()}:{flowing}");
                 if(!Materials.TryGetValue(key,out var material))
                 {
                     material=terrain?Ground(board):Create(SunActive?PaperSunlitStyle.Retint(source.ResourceName,source.AlbedoColor):source.AlbedoColor,false,"",source.AlbedoTexture,source.VertexColorUseAsAlbedo,source.VertexColorIsSrgb);
                     if(!LegacyMaterialForInspection && material is ShaderMaterial moving)moving.SetShaderParameter("water_flow",(float)flowing);
+                    if(scenery && SunActive && material is ShaderMaterial outside)outside.SetShaderParameter("scenery",true);
                     Materials[key]=material;
                 }
                 mesh.SetSurfaceOverrideMaterial(i,material);
             }
-        foreach(var child in node.GetChildren())Apply(child,terrain,board);
+        foreach(var child in node.GetChildren())Apply(child,terrain,board,scenery);
     }
     public static void ApplyCell(HexCell3D cell)
     {

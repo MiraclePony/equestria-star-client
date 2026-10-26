@@ -45,6 +45,7 @@ public partial class ZoomArtDetailController : Node
         public Group Existing=new();public Group Streamed=new();
         public OrigamiMapPresentation.NearProp[] Specs=[];
         public Node3D? Root;
+        public Node3D? Diorama;   // P9 close-zoom themed set dressing (PaperCellDiorama)
         public int Next;public double LastNeeded;public bool InView;public int Target;public int Shown;
     }
     private readonly List<Slot> _slots=[];
@@ -59,6 +60,7 @@ public partial class ZoomArtDetailController : Node
     private readonly Dictionary<Node3D,Group> _skyFine=[];
     private readonly HashSet<Node3D> _skyFineTargets=[];
     private double _lastFrameTime;
+    private float _overview;
     public ZoomDetailSettings Settings {get;set;}=ZoomDetailSettings.Load();
     public DetailAssetCache Cache {get;set;}=DetailAssetCache.Shared;
     public Vector4 ViewInsets {get;set;}
@@ -73,6 +75,8 @@ public partial class ZoomArtDetailController : Node
     public double LastTickMs {get;private set;}
     public double MaxTickMs {get;private set;}
     public int ResidentCellCount=>_slots.Count(s=>s.Root!=null);
+    public int DioramaCount=>_slots.Count(s=>s.Diorama!=null);
+    public int VisibleDioramas=>_slots.Count(s=>s.Diorama is {Visible:true});
     public int VisibleNearCells=>_slots.Count(s=>s.Existing.Amount>.99f || s.Streamed.Amount>.99f);
     public int NearMeshCount=>_slots.Sum(s=>s.Existing.Meshes.Count+s.Streamed.Meshes.Count);
     public int CriticalMarkerCount=>_information?.MarkerCount??0;
@@ -184,6 +188,32 @@ public partial class ZoomArtDetailController : Node
             foreach(var mesh in prop.FindChildren("*","MeshInstance3D",true,false).OfType<MeshInstance3D>())slot.Streamed.Add(mesh);
             Cache.CountUse(paths);
         }
+        // Close zoom: build each in-view cell's themed diorama, one cell per frame within budget.
+        if(PaperCellDiorama.Enabled && DetailsEnabled && stage>=2)
+        {
+            var built=0;
+            foreach(var slot in candidates)
+            {
+                if(slot.Diorama!=null)continue;
+                if(built>=1 || watch.Elapsed.TotalMilliseconds>=Settings.InstantiateBudgetMs*3)break;
+                slot.Diorama=PaperCellDiorama.Build(slot.Cell);slot.LastNeeded=now;built++;
+            }
+        }
+        foreach(var slot in _slots)
+            if(slot.Diorama!=null)slot.Diorama.Visible=DetailsEnabled && stage>=2 && wanted.Contains(slot);
+        if(PaperCellDiorama.Enabled)
+        {
+            // Widest zoom reads like a strategy map: pawn beacons up, exterior scenery steps back.
+            _overview=Mathf.MoveToward(_overview,stage==0?1f:stage==1?.4f:0f,(float)delta/Settings.FadeSeconds);
+            RenderingServer.GlobalShaderParameterSet("paper_overview",_overview);
+            foreach(var slot in _slots)
+            {
+                var beacon=PaperPawnBeacon.Sync(slot.Cell);
+                if(beacon==null)continue;
+                beacon.Visible=stage<2;
+                if(beacon.Visible)PaperPawnBeacon.Scale(beacon,_camera.Size,slot.Cell.Radius);
+            }
+        }
         if(count>0)MaxInstantiationMs=Math.Max(MaxInstantiationMs,watch.Elapsed.TotalMilliseconds);
         MaxInstantiatedInFrame=Math.Max(MaxInstantiatedInFrame,count);
         foreach(var slot in _slots)
@@ -198,6 +228,8 @@ public partial class ZoomArtDetailController : Node
         foreach(var slot in _slots.Where(s=>s.Root!=null && !wanted.Contains(s) && s.Streamed.Amount==0).OrderBy(s=>s.LastNeeded).ToArray())
             if(released<Settings.MaxReleasesPerFrame && (now-slot.LastNeeded>Settings.CacheGraceSeconds || ResidentCellCount>Settings.MaxRetainedCells))
             {slot.Root!.Free();slot.Root=null;slot.Streamed=new Group();slot.Next=0;released++;}
+        foreach(var slot in _slots.Where(s=>s.Diorama!=null && !s.Diorama.Visible && now-s.LastNeeded>Settings.CacheGraceSeconds).Take(Settings.MaxReleasesPerFrame).ToArray())
+        {slot.Diorama!.QueueFree();slot.Diorama=null;}
         // One complete mesh at every distance; zoom only controls independent cosmetic details.
         if(_camera.GetViewport().MeshLodThreshold!=0)_camera.GetViewport().MeshLodThreshold=0;
         var ties=_mapRoot.GetNodeOrNull<Node3D>("ReferenceRailDraft/PaperSleepers");if(ties!=null)ties.Visible=stage>=1;
@@ -228,7 +260,7 @@ public partial class ZoomArtDetailController : Node
         _information.Route=route;return true;
     }
     public object Snapshot()=>new {stage=Stage,screenRatio=ScreenRatio,detailsEnabled=DetailsEnabled,nearCells=ResidentCellCount,visibleNearCells=VisibleNearCells,
-        nearMeshes=NearMeshCount,requests=Cache.Requests,cacheHits=Cache.CacheHits,resources=Cache.ResidentCount,loading=Cache.LoadingCount,failed=Cache.FailedCount,
+        nearMeshes=NearMeshCount,dioramas=DioramaCount,visibleDioramas=VisibleDioramas,requests=Cache.Requests,cacheHits=Cache.CacheHits,resources=Cache.ResidentCount,loading=Cache.LoadingCount,failed=Cache.FailedCount,
         instances=InstancesCreated,maxPerFrame=MaxInstantiatedInFrame,maxInstantiationMs=MaxInstantiationMs,tickMs=LastTickMs,maxTickMs=MaxTickMs,criticalMarkers=CriticalMarkerCount,
         cells=_slots.Select(s=>new {id=s.Cell.Data!.CellCode,target=s.Target,shown=s.Shown,state=s.Root!=null?"resident":s.Specs.Length>0?string.Join(",",s.Specs.SelectMany(p=>p.Parts.Select(k=>Cache.State(EnvironmentArtCatalog.Entries[p.Id].Components[k].Path)))):"base-only",fade=s.Existing.Amount}).ToArray()};
     public override void _ExitTree()

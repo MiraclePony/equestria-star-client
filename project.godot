@@ -53,6 +53,10 @@ paper_motion={
 "type": "float",
 "value": 1.0
 }
+paper_overview={
+"type": "float",
+"value": 0.0
+}
 paper_detail={
 "type": "float",
 "value": 1.0
