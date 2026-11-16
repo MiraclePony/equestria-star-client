@@ -319,6 +319,24 @@ public partial class ApiClient : Node
         );
     }
 
+    /// <summary>本局自己的伙伴（只读展示；招募、技能等写操作不在此接入）。</summary>
+    public Task<ApiResult<PlayerPartnerListResponseDto>> GetPlayerPartnersAsync(long gameId, long playerId)
+    {
+        return GetJsonAsync<PlayerPartnerListResponseDto>(
+            $"/games/{gameId}/partners",
+            new Dictionary<string, string?> { ["playerId"] = playerId.ToString() }
+        );
+    }
+
+    /// <summary>本局玩家可读行动日志（历史记录抽屉只读展示）。</summary>
+    public Task<ApiResult<List<ActionLogDto>>> GetActionLogsAsync(long gameId, int limit = 20)
+    {
+        return GetJsonAsync<List<ActionLogDto>>(
+            $"/games/{gameId}/action-logs",
+            new Dictionary<string, string?> { ["limit"] = limit.ToString() }
+        );
+    }
+
     public Task<ApiResult<CurrentShopResponseDto>> GetCurrentShopAsync(long gameId, long playerId)
     {
         return GetJsonAsync<CurrentShopResponseDto>(

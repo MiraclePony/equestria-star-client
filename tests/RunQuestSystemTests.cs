@@ -108,6 +108,10 @@ public partial class RunQuestSystemTests : SceneTree
         var submitButton = firstCard.GetNode<Button>("Margin/Content/Actions/SubmitButton");
         AssertFalse(submitButton.Disabled, "submission.canSubmit=true 时提交按钮应可用");
         var actionBefore = transport.ActionCount;
+        // 折纸 HUD 进入对局时会只读预取一次背包作为底栏预览；等它完成后再以此为基线计数，
+        // 下面仍严格校验“每次领取成功只重新 GET 一次 /items”。
+        await WaitUntilAsync(() => transport.ItemsRequestCount >= 1);
+        var itemsBaseline = transport.ItemsRequestCount;
         await DispatchViewportClickAsync(submitButton);
         await DispatchViewportClickAsync(submitButton);
         await WaitUntilAsync(() => screen.QuestJournal.State == QuestJournalState.Reward);
@@ -129,7 +133,7 @@ public partial class RunQuestSystemTests : SceneTree
         AssertPayload(transport.LastAction, "rewardId", 71, "领取必须携带当前队首 rewardId");
         AssertPayload(transport.LastAction, "cardId", 901, "领取必须携带候选 cardId，不能用 itemId 代替");
         AssertEqual(transport.LastAction?.Payload.Count, 2, "领取 payload 只能包含 rewardId/cardId");
-        AssertEqual(transport.ItemsRequestCount, 1, "领取成功后必须重新 GET /items");
+        AssertEqual(transport.ItemsRequestCount, itemsBaseline + 1, "领取成功后必须重新 GET /items");
         AssertTrue(screen.QuestInventorySnapshot?.Items?.Any(item => item.PlayerItemId == 8801 && item.ItemId == 1003) == true,
             "领取后的真实 playerItemId 必须来自 GET /items，不能使用 cardId");
 
@@ -139,7 +143,7 @@ public partial class RunQuestSystemTests : SceneTree
         await WaitUntilAsync(() => screen.QuestJournal.State == QuestJournalState.Tasks);
         AssertPayload(transport.LastAction, "rewardId", 72, "连续 FIFO 必须使用新鲜队首 rewardId");
         AssertPayload(transport.LastAction, "cardId", 902, "连续 FIFO 必须使用新鲜候选 cardId");
-        AssertEqual(transport.ItemsRequestCount, 2, "每次领取成功都必须重新 GET /items");
+        AssertEqual(transport.ItemsRequestCount, itemsBaseline + 2, "每次领取成功都必须重新 GET /items");
         AssertTrue(screen.QuestInventorySnapshot?.Items?.Any(item => item.PlayerItemId == 8802 && item.ItemId == 1017) == true,
             "第二个同流程奖励也必须采用背包接口返回的真实实例 ID");
 

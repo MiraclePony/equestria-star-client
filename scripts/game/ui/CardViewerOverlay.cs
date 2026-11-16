@@ -74,7 +74,7 @@ public partial class CardViewerOverlay : CanvasLayer
     private Control _loadingState = null!;
     private Control _contentState = null!;
     private Label _emptyLabel = null!;
-    private HBoxContainer _cardRow = null!;
+    private BoxContainer _cardRow = null!;
     private ScrollContainer _personalQuestScroll = null!;
     private HBoxContainer _personalQuestRow = null!;
     private Control _errorState = null!;
@@ -85,7 +85,7 @@ public partial class CardViewerOverlay : CanvasLayer
     private VBoxContainer _decisionOptions = null!;
     private Button _decisionConfirm = null!;
     private Button _decisionCancel = null!;
-    private readonly List<VBoxContainer> _cardSlots = [];
+    private readonly List<BoxContainer> _cardSlots = [];
     private readonly List<AspectRatioContainer> _cardAspects = [];
     private readonly List<TextureRect> _cardTextures = [];
     private readonly List<PanelContainer> _actionAreas = [];
@@ -126,7 +126,7 @@ public partial class CardViewerOverlay : CanvasLayer
         _loadingState = GetNode<Control>("OverlayRoot/Center/Layout/LoadingState");
         _contentState = GetNode<Control>("OverlayRoot/Center/Layout/ContentState");
         _emptyLabel = GetNode<Label>("OverlayRoot/Center/Layout/ContentState/EmptyLabel");
-        _cardRow = GetNode<HBoxContainer>("OverlayRoot/Center/Layout/ContentState/CardRow");
+        _cardRow = GetNode<BoxContainer>("OverlayRoot/Center/Layout/ContentState/CardRow");
         _personalQuestScroll = GetNode<ScrollContainer>("OverlayRoot/Center/Layout/ContentState/PersonalQuestScroll");
         _personalQuestRow = GetNode<HBoxContainer>("OverlayRoot/Center/Layout/ContentState/PersonalQuestScroll/PersonalQuestRow");
         _errorState = GetNode<Control>("OverlayRoot/Center/Layout/ErrorState");
@@ -140,7 +140,7 @@ public partial class CardViewerOverlay : CanvasLayer
 
         for (var index = 1; index <= MaximumVisibleCards; index++)
         {
-            var slot = GetNode<VBoxContainer>($"OverlayRoot/Center/Layout/ContentState/CardRow/CardSlot{index}");
+            var slot = GetNode<BoxContainer>($"OverlayRoot/Center/Layout/ContentState/CardRow/CardSlot{index}");
             var cardAspect = slot.GetNode<AspectRatioContainer>("CardAspect");
             var actionArea = slot.GetNode<PanelContainer>("ActionArea");
             var actionButton = actionArea.GetNode<Button>("ActionButton");
@@ -162,6 +162,7 @@ public partial class CardViewerOverlay : CanvasLayer
         _decisionConfirm.Pressed += OnDecisionConfirmed;
         _decisionCancel.Pressed += CloseDecision;
         GetViewport().SizeChanged += OnViewportSizeChanged;
+        SetupDrawerPresentation();
         _overlayRoot.Visible = false;
         ApplyState(CardViewerState.Closed);
         CloseDecision();
@@ -204,6 +205,7 @@ public partial class CardViewerOverlay : CanvasLayer
         _displayedKeys.Clear();
         _displayedCards.Clear();
         ClearTextures();
+        ApplyPresentation(kind);
         _titleLabel.Text = TitleFor(kind);
         _hintLabel.Text = IsScrollableKind(kind)
             ? "只读查看 · 滚轮或拖动滚动条浏览 · 点击其他区域关闭"
@@ -225,6 +227,7 @@ public partial class CardViewerOverlay : CanvasLayer
     {
         ArgumentNullException.ThrowIfNull(cards);
         Kind = kind;
+        ApplyPresentation(kind);
         _displayedKeys.Clear();
         _displayedCards.Clear();
         ClearTextures();
@@ -323,6 +326,7 @@ public partial class CardViewerOverlay : CanvasLayer
     public void ShowError(CardViewerKind kind, string message)
     {
         Kind = kind;
+        ApplyPresentation(kind);
         _displayedKeys.Clear();
         _displayedCards.Clear();
         ClearTextures();
@@ -444,6 +448,12 @@ public partial class CardViewerOverlay : CanvasLayer
                 card.ResizeCard(cardWidth, scrollCardRatio);
             }
 
+            return;
+        }
+
+        if (_drawerPresentation)
+        {
+            RefreshDrawerCardSizes();
             return;
         }
 

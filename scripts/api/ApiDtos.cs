@@ -1723,3 +1723,74 @@ public sealed class GameMovementResultDto
     [JsonPropertyName("stayReason")]
     public string? StayReason { get; set; }
 }
+
+/// <summary>GET /games/{gameId}/partners 的返回（只读展示用）。</summary>
+public sealed class PlayerPartnerListResponseDto
+{
+    [JsonPropertyName("gameId")]
+    public long? GameId { get; set; }
+
+    [JsonPropertyName("playerId")]
+    public long? PlayerId { get; set; }
+
+    [JsonPropertyName("partners")]
+    public List<PlayerPartnerDto>? Partners { get; set; }
+}
+
+public sealed class PlayerPartnerDto
+{
+    [JsonPropertyName("playerPartnerId")]
+    public long? PlayerPartnerId { get; set; }
+
+    [JsonPropertyName("partnerId")]
+    public long? PartnerId { get; set; }
+
+    [JsonPropertyName("partnerCode")]
+    public string? PartnerCode { get; set; }
+
+    [JsonPropertyName("partnerName")]
+    public string? PartnerName { get; set; }
+
+    [JsonPropertyName("partnerType")]
+    public string? PartnerType { get; set; }
+
+    [JsonPropertyName("partnerTypeText")]
+    public string? PartnerTypeText { get; set; }
+
+    [JsonPropertyName("description")]
+    public string? Description { get; set; }
+
+    [JsonPropertyName("status")]
+    public string? Status { get; set; }
+
+    [JsonPropertyName("statusText")]
+    public string? StatusText { get; set; }
+}
+
+/// <summary>GET /games/{gameId}/action-logs 的单条记录。</summary>
+public sealed class ActionLogDto
+{
+    [JsonPropertyName("logId")]
+    public long? LogId { get; set; }
+
+    [JsonPropertyName("stateVersion")]
+    public long? StateVersion { get; set; }
+
+    [JsonPropertyName("playerId")]
+    public long? PlayerId { get; set; }
+
+    [JsonPropertyName("playerName")]
+    public string? PlayerName { get; set; }
+
+    [JsonPropertyName("actionType")]
+    public string? ActionType { get; set; }
+
+    [JsonPropertyName("actionTypeText")]
+    public string? ActionTypeText { get; set; }
+
+    [JsonPropertyName("message")]
+    public string? Message { get; set; }
+
+    [JsonPropertyName("createdAt")]
+    public string? CreatedAt { get; set; }
+}

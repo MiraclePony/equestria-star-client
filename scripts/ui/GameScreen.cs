@@ -70,7 +70,18 @@ public partial class GameScreen : Control
     private long? _moveCurrentCellId;
     private CardViewerKind _cardViewerKind;
     private QuestOfferListResponseDto? _latestQuestOffers;
-    private PlayerQuestListResponseDto? _latestPersonalQuests;
+    private PlayerQuestListResponseDto? _latestPersonalQuestsValue;
+
+    // 个人任务快照更新时同步“我的任务”角标（不额外请求）。
+    private PlayerQuestListResponseDto? _latestPersonalQuests
+    {
+        get => _latestPersonalQuestsValue;
+        set
+        {
+            _latestPersonalQuestsValue = value;
+            OnPersonalQuestSnapshotChanged(value);
+        }
+    }
 
     private ApiClient ApiClient => GetNode<ApiClient>("/root/ApiClient");
     private Session Session => GetNode<Session>("/root/Session");
@@ -135,6 +146,7 @@ public partial class GameScreen : Control
         _hud.InventoryRequested += OnHudInventoryRequested;
         _hud.EquipmentRequested += OnEquipmentRequested;
         _hud.RailwayRequested += OnRailwayRequested;
+        ConnectPaperHudSignals();
         _cardViewer.Closed += OnCardViewerClosed;
         _cardViewer.RetryRequested += OnCardViewerRetryRequested;
         _cardViewer.CardActionPressed += OnCardActionPressed;
@@ -167,6 +179,7 @@ public partial class GameScreen : Control
             _hudRetryButton.Pressed -= OnHudRetryPressed;
         }
 
+        DisconnectPaperHudSignals();
         if (GodotObject.IsInstanceValid(_hud))
         {
             _hud.EndTurnRequested -= OnEndTurnRequested;
@@ -244,6 +257,7 @@ public partial class GameScreen : Control
         _latestQuestOffers = null;
         _latestPersonalQuests = null;
         _shopStateVersionFloor = 0;
+        ResetPaperHudPreviews();
         ResetItemSystemForStart();
         ResetQuestSystemForStart();
         ResetWorkFlowForStart();
@@ -1878,6 +1892,7 @@ public partial class GameScreen : Control
         HandlePlayerViewForQuestSystem(playerView);
         HandlePlayerViewForItemSystem(playerView);
         HandlePlayerViewForQuestTargetSubmissions(playerView);
+        HandlePlayerViewForPaperHud(playerView);
         _hasPlayerView = true;
         LastPlayerViewError = "";
         _hudErrorState.Visible = false;

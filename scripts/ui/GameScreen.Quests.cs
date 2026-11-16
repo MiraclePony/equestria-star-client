@@ -17,7 +17,18 @@ public partial class GameScreen
     private bool _questJournalRequestInProgress;
     private Task _questSystemTask = Task.CompletedTask;
     private PlayerQuestListResponseDto? _questJournalSnapshot;
-    private PlayerItemsResponseDto? _inventorySnapshot;
+    private PlayerItemsResponseDto? _inventorySnapshotValue;
+
+    // 背包快照每次更新都同步给折纸 HUD 底栏（复用业务流程已有的 GET，不额外请求）。
+    private PlayerItemsResponseDto? _inventorySnapshot
+    {
+        get => _inventorySnapshotValue;
+        set
+        {
+            _inventorySnapshotValue = value;
+            OnInventorySnapshotChanged(value);
+        }
+    }
     private GameActionRequestDto? _unresolvedQuestAction;
     private long _rewardValidationRefreshStateVersion = -1;
 

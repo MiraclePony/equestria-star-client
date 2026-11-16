@@ -8,10 +8,9 @@ namespace EquestriaStar.Game.UI;
 
 public partial class GameHud : CanvasLayer
 {
-    private const float RightButtonScale = 1.75f;
-
+    // 折纸版按 1920×1080 设计画布排版，默认不再整体缩小。
     [Export(PropertyHint.Range, "0.5,1.75,0.025")]
-    public float HudScale { get; set; } = 0.875f;
+    public float HudScale { get; set; } = 1.0f;
 
     private Control _hudRoot = null!;
 
@@ -123,17 +122,11 @@ public partial class GameHud : CanvasLayer
         _hudRoot.AnchorRight = 1.0f / HudScale;
         _hudRoot.AnchorBottom = 1.0f / HudScale;
         _hudRoot.Scale = Vector2.One * HudScale;
-        KeepRightButtonScale(_hudRoot.GetNode<Control>("TopRightAnchor"));
-        KeepRightButtonScale(_hudRoot.GetNode<Control>("ActionMenuAnchor"));
-        KeepRightButtonScale(_hudRoot.GetNode<Control>("BottomActionsAnchor"));
 
-        _currentNicknameLabel = GetNode<Label>("HudRoot/LeftMargin/LeftRail/CurrentPlayerPanel/NameRibbon/NicknameLabel");
-        _currentAvatarNameLabel = GetNode<Label>("HudRoot/LeftMargin/LeftRail/CurrentPlayerPanel/AvatarPlaceholder/AvatarNameLabel");
-        _coinsValueLabel = GetNode<Label>("HudRoot/LeftMargin/LeftRail/CurrentPlayerPanel/StatusContent/CoinsBox/CoinsValue");
-        _prestigeValueLabel = GetNode<Label>("HudRoot/LeftMargin/LeftRail/CurrentPlayerPanel/StatusContent/PrestigeBox/PrestigeValue");
-        _emptyOtherPlayersLabel = GetNode<Label>("HudRoot/LeftMargin/LeftRail/OtherPlayersPanel/OtherPlayersScroll/OtherPlayersList/EmptyLabel");
-        _otherPlayersScroll = GetNode<ScrollContainer>("HudRoot/LeftMargin/LeftRail/OtherPlayersPanel/OtherPlayersScroll");
-        _otherPlayersList = GetNode<VBoxContainer>("HudRoot/LeftMargin/LeftRail/OtherPlayersPanel/OtherPlayersScroll/OtherPlayersList");
+        // 折纸风版式在代码中构建（左侧名牌、底栏、右侧拉手、顶部抽屉、行为菜单），
+        // 同时给下面这些字段赋值：玩家列表、底栏标签、全部入口按钮。
+        BuildPaperLayout();
+
         _detailPanel = GetNode<PanelContainer>("HudRoot/PlayerDetailPanel");
         _detailNicknameLabel = GetNode<Label>("HudRoot/PlayerDetailPanel/ContentMargin/Content/NicknameLabel");
         _detailCoinsValueLabel = GetNode<Label>("HudRoot/PlayerDetailPanel/ContentMargin/Content/ResourceRow/CoinsValue");
@@ -142,20 +135,6 @@ public partial class GameHud : CanvasLayer
         _turnNoticeLabel = GetNode<Label>("HudRoot/TurnNoticeAnchor/TurnNoticePanel/TurnNoticeLabel");
         _connectionNoticeAnchor = GetNode<Control>("HudRoot/ConnectionNoticeAnchor");
         _connectionNoticeLabel = GetNode<Label>("HudRoot/ConnectionNoticeAnchor/ConnectionNoticePanel/ConnectionNoticeLabel");
-        _endTurnAnchor = GetNode<Control>("HudRoot/ActionMenuAnchor/ActionMenu/MenuPanel/MenuMargin/Menu/EndTurnSlot");
-        _endTurnButton = GetNode<Button>("HudRoot/ActionMenuAnchor/ActionMenu/MenuPanel/MenuMargin/Menu/EndTurnSlot/EndTurnButton");
-        _questBoardButton = GetNode<Button>("HudRoot/TopRightAnchor/TopRight/PublicButtons/QuestBoardButton");
-        _shopShelfButton = GetNode<Button>("HudRoot/TopRightAnchor/TopRight/PublicButtons/ShopShelfButton");
-        _personalQuestsButton = GetNode<Button>("HudRoot/BottomActionsAnchor/Buttons/QuestsButton");
-        _inventoryButton = GetNode<Button>("HudRoot/BottomActionsAnchor/Buttons/ItemsButton");
-        _equipmentButton = GetNode<Button>("HudRoot/BottomActionsAnchor/Buttons/EquipmentButton");
-        _partnersButton = GetNode<Button>("HudRoot/BottomActionsAnchor/Buttons/PartnersButton");
-        _actionMenuPanel = GetNode<Control>("HudRoot/ActionMenuAnchor/ActionMenu/MenuPanel");
-        _actionMenuButton = GetNode<Button>("HudRoot/ActionMenuAnchor/ActionMenu/ActionMenuButton");
-        _workButton = GetNode<Button>("HudRoot/ActionMenuAnchor/ActionMenu/MenuPanel/MenuMargin/Menu/WorkButton");
-        _railwayButton = GetNode<Button>("HudRoot/ActionMenuAnchor/ActionMenu/MenuPanel/MenuMargin/Menu/RailwayButton");
-        _questCheckButton = GetNode<Button>("HudRoot/ActionMenuAnchor/ActionMenu/MenuPanel/MenuMargin/Menu/QuestCheckButton");
-        _questSubmissionButton = GetNode<Button>("HudRoot/ActionMenuAnchor/ActionMenu/MenuPanel/MenuMargin/Menu/QuestSubmissionButton");
         _endTurnButton.Pressed += OnEndTurnPressed;
         _questBoardButton.Pressed += OnQuestBoardPressed;
         _shopShelfButton.Pressed += OnShopShelfPressed;
@@ -168,7 +147,6 @@ public partial class GameHud : CanvasLayer
         _questCheckButton.Pressed += OnQuestCheckPressed;
         _questSubmissionButton.Pressed += OnQuestSubmissionPressed;
 
-        BindAttributeLabels(_currentAttributeLabels, "HudRoot/LeftMargin/LeftRail/CurrentPlayerPanel/StatusContent/AttributesGrid");
         BindAttributeLabels(_detailAttributeLabels, "HudRoot/PlayerDetailPanel/ContentMargin/Content/AttributesGrid");
 
         if (_pendingPlayerView != null)
@@ -181,23 +159,12 @@ public partial class GameHud : CanvasLayer
         }
     }
 
-    private void KeepRightButtonScale(Control group)
-    {
-        // 保持按钮组与屏幕锚点的距离，内部布局仍按原尺寸计算。
-        var ratio = RightButtonScale / HudScale;
-        var width = group.OffsetRight - group.OffsetLeft;
-        var height = group.OffsetBottom - group.OffsetTop;
-        var left = group.OffsetLeft * ratio;
-        var top = group.OffsetTop * ratio;
-        group.OffsetLeft = left;
-        group.OffsetTop = top;
-        group.OffsetRight = left + width;
-        group.OffsetBottom = top + height;
-        group.Scale = Vector2.One * ratio;
-    }
 
     public override void _ExitTree()
     {
+        if (GodotObject.IsInstanceValid(_chatHandle)) _chatHandle.Pressed -= OnChatHandlePressed;
+        if (GodotObject.IsInstanceValid(_historyHandle)) _historyHandle.Pressed -= OnHistoryHandlePressed;
+
         if (GodotObject.IsInstanceValid(_endTurnButton))
         {
             _endTurnButton.Pressed -= OnEndTurnPressed;
@@ -328,6 +295,7 @@ public partial class GameHud : CanvasLayer
         _connectionReady = ready;
         if (IsNodeReady())
         {
+            ApplySyncIndicator(ready);
             RefreshTurnPresentation();
         }
     }
@@ -417,17 +385,22 @@ public partial class GameHud : CanvasLayer
             SetAttributes(_currentAttributeLabels, currentPlayer.EffectiveAttributes);
         }
 
-        var otherPlayers = players
-            .Where(player => player.UserId != currentUserId)
+        ApplySelfAvatar(currentPlayer);
+        ApplyRound(playerView);
+
+        // 左侧名牌按真实回合顺序列出全部玩家（含本人），当前行动者放大。
+        var orderedPlayers = players
             .OrderBy(player => player.TurnOrder)
             .ThenBy(player => player.UserId)
             .ToList();
+        var otherPlayers = orderedPlayers.Where(player => player.UserId != currentUserId).ToList();
 
         OtherPlayerCount = otherPlayers.Count;
         _emptyOtherPlayersLabel.Visible = otherPlayers.Count == 0;
         _emptyOtherPlayersLabel.Text = otherPlayers.Count == 0 ? "暂无其他玩家" : "";
-        SynchronizeOtherPlayerEntries(otherPlayers);
-        ResizeOtherPlayersScroll(otherPlayers.Count);
+        SynchronizeOtherPlayerEntries(orderedPlayers);
+        ApplyTurnStates(orderedPlayers, playerView, currentUserId);
+        ResizeOtherPlayersScroll(orderedPlayers.Count);
 
         RefreshTurnPresentation();
     }
@@ -848,13 +821,15 @@ public partial class GameHud : CanvasLayer
 
     private void ResizeOtherPlayersScroll(int playerCount)
     {
-        const float entryHeight = 77.0f;
-        const float separation = 5.0f;
+        // 一块当前行动名牌（更高）+ 其余普通名牌；超出底栏以上的可用高度时滚动。
+        const float entryHeight = OtherPlayerHudEntry.NormalHeight;
+        const float currentExtra = OtherPlayerHudEntry.CurrentHeight - OtherPlayerHudEntry.NormalHeight;
+        const float separation = 22.0f;
         const float emptyHeight = 66.0f;
-        const float maximumHeight = 255.0f;
+        const float maximumHeight = 700.0f;
         var contentHeight = playerCount <= 0
             ? emptyHeight
-            : playerCount * entryHeight + Math.Max(0, playerCount - 1) * separation;
+            : playerCount * entryHeight + currentExtra + Math.Max(0, playerCount - 1) * separation;
         _otherPlayersScroll.Size = new Vector2(
             _otherPlayersScroll.Size.X,
             Math.Min(maximumHeight, contentHeight)
