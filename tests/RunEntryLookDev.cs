@@ -84,7 +84,7 @@ public partial class RunEntryLookDev : SceneTree
             app.ShowLogin("yun");
             await Capture($"{outDir}/_tmp.png", 10);
             PageTurn.Enabled = true;
-            foreach (var (name, angle) in new[] { ("10_open_cover", 0f), ("11_open_turning", 1.25f), ("12_open_landing", 2.45f) })
+            foreach (var (name, angle) in new[] { ("10_open_cover", 0f), ("11_open_turning", 1.25f), ("12_open_landing", 2.45f), ("12b_open_end", Mathf.Pi) })
             {
                 PageTurn.FreezeAngle = angle;
                 await PageTurn.PlayOpening(app);
@@ -97,7 +97,7 @@ public partial class RunEntryLookDev : SceneTree
                 AccessToken = "lookdev",
                 User = new UserDto { UserId = 1, Username = "pony_star", Nickname = "小星" }
             });
-            foreach (var (name, angle, forward) in new[] { ("13_turn_forward_a", 0.95f, true), ("14_turn_forward_b", 2.2f, true), ("15_turn_back", 1.4f, false) })
+            foreach (var (name, angle, forward) in new[] { ("13_turn_forward_a", 0.95f, true), ("14_turn_forward_b", 2.2f, true), ("14b_forward_end", Mathf.Pi, true), ("15_turn_back", 1.4f, false), ("15b_back_end", Mathf.Pi, false) })
             {
                 PageTurn.Enabled = false;
                 if (forward)
@@ -127,6 +127,10 @@ public partial class RunEntryLookDev : SceneTree
 
             PageTurn.FreezeAngle = null;
             PageTurn.Enabled = false;
+            app.ShowLobby();
+            await Capture($"{outDir}/16_ref_lobby.png", 20);
+            app.ShowLogin("yun");
+            await Capture($"{outDir}/16_ref_login.png", 20);
             System.IO.File.Delete($"{outDir}/_tmp.png");
             GD.Print("ENTRY_LOOKDEV_DONE");
         }

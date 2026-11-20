@@ -6,7 +6,7 @@ namespace EquestriaStar.UI;
 
 /// <summary>
 /// 入口立体书的程序化翻页：
-/// - 切换书页（登录 / 注册 / 大厅 / 房间 / 选角）时，截下旧画面，让一页纸绕书脊翻过去，背面是新一页的书本背景；
+/// - 切换书页（登录 / 注册 / 大厅 / 房间 / 选角）时，截下旧画面，让一页纸绕书脊翻过去，背面是新画面对侧那一页（实时屏幕纹理）；
 /// - 客户端启动时先显示一张程序生成的布面封面，再把封面翻开。
 /// 纯视觉叠层，不改动页面切换逻辑；无头模式（测试）与 <see cref="Enabled"/> = false 时直接跳过。
 /// </summary>
@@ -72,7 +72,6 @@ public partial class PageTurn : Control
 
         _material = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/page_turn.gdshader") };
         _material.SetShaderParameter("old_tex", oldScreen);
-        _material.SetShaderParameter("back_tex", EntryBook.Tex("bg/" + newBackground) ?? (Texture2D)oldScreen);
         _material.SetShaderParameter("spine", spine / EntryBook.StageWidth);
         _material.SetShaderParameter("page_w", pageWidth / EntryBook.StageWidth);
         _material.SetShaderParameter("back_spine", newSpine / EntryBook.StageWidth);
