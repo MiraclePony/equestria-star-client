@@ -35,6 +35,7 @@ public partial class RegisterScreen : Control
         _backButton = GetNode<Button>("CenterContainer/RegisterPanel/FormMargin/Form/BackButton");
         _statusLabel = GetNode<Label>("CenterContainer/RegisterPanel/FormMargin/Form/StatusLabel");
 
+        ApplyBookStyle();
         _passwordEdit.Secret = true;
         _confirmPasswordEdit.Secret = true;
         _registerButton.Pressed += OnRegisterPressed;
@@ -122,7 +123,47 @@ public partial class RegisterScreen : Control
 
     private void ShowStatus(string message, bool isError)
     {
-        _statusLabel.Text = message;
-        _statusLabel.AddThemeColorOverride("font_color", isError ? new Color(0.72f, 0.16f, 0.11f) : new Color(0.18f, 0.38f, 0.48f));
+        EntryBook.ShowStatus(_statusLabel, message, isError);
+    }
+
+    /// <summary>登记页：与扉页同一张左页，右页是更高的登记卡。</summary>
+    private void ApplyBookStyle()
+    {
+        var stage = EntryBook.BuildStage(this, "login");
+        var page = EntryBook.RightPage["login"];
+        EntryBook.RunningHead(stage, page, "登记页");
+        EntryBook.Footer(stage, page);
+
+        var center = GetNode<CenterContainer>("CenterContainer");
+        EntryBook.PlaceOnStage(center, new Rect2(page.Position.X, page.Position.Y + 96, page.Size.X, page.Size.Y - 150));
+        EntryBook.DecorateCard(GetNode<PanelContainer>("CenterContainer/RegisterPanel"), 500, 196);
+        var margin = GetNode<MarginContainer>("CenterContainer/RegisterPanel/FormMargin");
+        margin.AddThemeConstantOverride("margin_left", 46);
+        margin.AddThemeConstantOverride("margin_right", 46);
+        margin.AddThemeConstantOverride("margin_top", 30);
+        margin.AddThemeConstantOverride("margin_bottom", 92);
+        var form = GetNode<VBoxContainer>("CenterContainer/RegisterPanel/FormMargin/Form");
+        form.AddThemeConstantOverride("separation", 13);
+
+        var title = form.GetNode<Label>("Title");
+        title.Text = "注册";
+        EntryBook.StyleCardTitle(title, 40);
+        EntryBook.StyleInput(_usernameEdit, "horseshoe", 46, 18);
+        EntryBook.StyleInput(_passwordEdit, "lock", 46, 18);
+        EntryBook.StyleInput(_confirmPasswordEdit, "lock", 46, 18);
+        EntryBook.StyleInput(_nicknameEdit, "star", 46, 18);
+        _usernameEdit.PlaceholderText = "账号（3～64 个字符）";
+        _passwordEdit.PlaceholderText = "密码（8～64 个字符）";
+        _confirmPasswordEdit.PlaceholderText = "确认密码";
+        _nicknameEdit.PlaceholderText = "昵称";
+
+        _statusLabel.CustomMinimumSize = new Vector2(0, 22);
+        _statusLabel.HorizontalAlignment = HorizontalAlignment.Center;
+        _statusLabel.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        EntryBook.StyleLabel(_statusLabel, 16, EntryBook.InfoInk);
+        EntryBook.StyleCapsule(_registerButton, EntryBook.CapsuleKind.Primary, 58, 27);
+        EntryBook.StyleCapsule(_backButton, EntryBook.CapsuleKind.Secondary, 50, 20, "back");
+        _backButton.CustomMinimumSize = new Vector2(408, 50);
+        EntryBook.KeepIconBesideText(_backButton);
     }
 }

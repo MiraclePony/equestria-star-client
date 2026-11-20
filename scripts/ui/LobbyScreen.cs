@@ -52,6 +52,7 @@ public partial class LobbyScreen : Control
         _createRoomDialog = GetNode<CreateRoomDialog>("CreateRoomDialog");
 
         _playerLabel.Text = $"当前玩家：{Session.GetPlayerName()}";
+        ApplyBookStyle();
         _logoutButton.Pressed += OnLogoutPressed;
         _createRoomButton.Pressed += _createRoomDialog.OpenDialog;
         _refreshButton.Pressed += () => RefreshRooms(true);
@@ -266,6 +267,69 @@ public partial class LobbyScreen : Control
         {
             EmitSignal(SignalName.LoggedOut);
         }
+    }
+
+    /// <summary>目录页：左页小镇隧道书，右页是房间目录；玩家书签从书顶垂下。</summary>
+    private void ApplyBookStyle()
+    {
+        var stage = EntryBook.BuildStage(this, "lobby");
+        var page = EntryBook.RightPage["lobby"];
+        EntryBook.Footer(stage, page);
+
+        var rootMargin = GetNode<MarginContainer>("RootMargin");
+        EntryBook.PlaceOnStage(rootMargin, page);
+        rootMargin.AddThemeConstantOverride("margin_left", 30);
+        rootMargin.AddThemeConstantOverride("margin_right", 30);
+        rootMargin.AddThemeConstantOverride("margin_top", 6);
+        rootMargin.AddThemeConstantOverride("margin_bottom", 60);
+        var layout = GetNode<VBoxContainer>("RootMargin/RootLayout");
+        layout.AddThemeConstantOverride("separation", 14);
+
+        // 页眉：小标志 | 游戏大厅 …… 右侧留给书签
+        var header = GetNode<HBoxContainer>("RootMargin/RootLayout/Header");
+        header.AddThemeConstantOverride("separation", 18);
+        header.CustomMinimumSize = new Vector2(0, 84);
+        var crest = EntryBook.Crest(196, 22);
+        crest.SizeFlagsVertical = SizeFlags.ShrinkCenter;
+        header.AddChild(crest);
+        header.MoveChild(crest, 0);
+        var bar = EntryBook.MakeLabel("|", 34, EntryBook.InkSoft);
+        header.AddChild(bar);
+        header.MoveChild(bar, 1);
+        var titleBox = GetNode<VBoxContainer>("RootMargin/RootLayout/Header/TitleBox");
+        titleBox.Alignment = BoxContainer.AlignmentMode.Center;
+        EntryBook.StyleLabel(titleBox.GetNode<Label>("Title"), 38, EntryBook.Ink, EntryBook.TitleFont);
+        _playerLabel.Visible = false;
+        var headRule = EntryBook.Rule(1.5f, new Color(EntryBook.InkSoft, 0.35f));
+        layout.AddChild(headRule);
+        layout.MoveChild(headRule, 1);
+
+        var bookmark = EntryBook.PlayerBookmark(Session.GetPlayerName(), _logoutButton);
+        AddChild(bookmark);
+        MoveChild(bookmark, _createRoomDialog.GetIndex());
+        EntryBook.PlaceOnStage(bookmark, new Rect2(page.End.X - 330, 0, 300, 140));
+
+        // 工具栏：搜索 / 刷新 / 创建房间（本页唯一主按钮）
+        var toolbar = GetNode<HBoxContainer>("RootMargin/RootLayout/Toolbar");
+        toolbar.AddThemeConstantOverride("separation", 16);
+        EntryBook.StyleInput(_searchEdit, "search", 52, 19);
+        _searchEdit.PlaceholderText = "搜索房间名称";
+        EntryBook.StyleCapsule(_refreshButton, EntryBook.CapsuleKind.Warm, 52, 20, "refresh");
+        _refreshButton.CustomMinimumSize = new Vector2(132, 52);
+        EntryBook.StyleCapsule(_createRoomButton, EntryBook.CapsuleKind.Primary, 56, 24, "plus");
+        _createRoomButton.CustomMinimumSize = new Vector2(236, 56);
+
+        var section = EntryBook.SectionHeader("目录");
+        layout.AddChild(section);
+        layout.MoveChild(section, toolbar.GetIndex() + 1);
+
+        EntryBook.StyleLabel(_bannerLabel, 16, EntryBook.InfoInk);
+        _bannerLabel.HorizontalAlignment = HorizontalAlignment.Center;
+        EntryBook.StyleLabel(_stateLabel, 19, EntryBook.InkSoft);
+        _stateLabel.HorizontalAlignment = HorizontalAlignment.Center;
+        _stateLabel.CustomMinimumSize = new Vector2(0, 120);
+        _roomList.AddThemeConstantOverride("separation", 4);
+        _scrollContainer.HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled;
     }
 
     private void SetState(string message)

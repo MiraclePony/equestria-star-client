@@ -36,6 +36,7 @@ public partial class App : Control
         Session.AuthCleared += OnSessionCleared;
         RefreshFooter();
         ShowLogin(Session.RememberedUsername);
+        _ = PageTurn.PlayOpening(this);
     }
 
     public override void _ExitTree()
@@ -54,7 +55,7 @@ public partial class App : Control
 
     public void ShowLogin(string prefillUsername = "")
     {
-        _footer.Visible = true;
+        _footer.Visible = false; // 立体书页面自带玩家书签，不需要底栏
         var screen = SwitchTo<LoginScreen>(_loginScene);
         screen.RecoverySucceeded += OnRecoverySucceeded;
         screen.RequestRegister += OnRequestRegister;
@@ -63,7 +64,7 @@ public partial class App : Control
 
     public void ShowRegister(string prefillUsername = "")
     {
-        _footer.Visible = true;
+        _footer.Visible = false; // 立体书页面自带玩家书签，不需要底栏
         var screen = SwitchTo<RegisterScreen>(_registerScene);
         screen.BackToLogin += ShowLogin;
         screen.RegisterSucceeded += ShowLogin;
@@ -72,7 +73,7 @@ public partial class App : Control
 
     public void ShowLobby()
     {
-        _footer.Visible = true;
+        _footer.Visible = false; // 立体书页面自带玩家书签，不需要底栏
         var screen = SwitchTo<LobbyScreen>(_lobbyScene);
         screen.EnterRoom += ShowRoom;
         screen.LoggedOut += OnLoggedOut;
@@ -81,7 +82,7 @@ public partial class App : Control
 
     public void ShowRoom()
     {
-        _footer.Visible = true;
+        _footer.Visible = false; // 立体书页面自带玩家书签，不需要底栏
         var screen = SwitchTo<RoomScreen>(_roomScene);
         screen.ReturnLobby += ShowLobby;
         screen.EnterCharacterSelect += ShowCharacterSelect;
@@ -91,7 +92,7 @@ public partial class App : Control
 
     public void ShowCharacterSelect()
     {
-        _footer.Visible = true;
+        _footer.Visible = false; // 立体书页面自带玩家书签，不需要底栏
         var screen = SwitchTo<CharacterSelectScreen>(_characterSelectScene);
         screen.ReturnLobby += ShowLobby;
         screen.ReturnRoom += ShowRoom;
@@ -106,8 +107,34 @@ public partial class App : Control
         screen.Start();
     }
 
+    /// <summary>立体书页面对应的书本背景（null = 不是书页，比如对局画面）。</summary>
+    private static string? BookBackground(Node? screen) => screen switch
+    {
+        LoginScreen or RegisterScreen => "login",
+        LobbyScreen => "lobby",
+        RoomScreen => "room",
+        CharacterSelectScreen => ResourceLoader.Exists("res://assets/art/ui/entry_book/bg/select.png") ? "select" : "lobby",
+        _ => null
+    };
+
+    /// <summary>书页先后顺序：往后翻 = 右页向左翻，往回 = 左页向右翻。</summary>
+    private static int BookOrder(Node? screen) => screen switch
+    {
+        LoginScreen => 0,
+        RegisterScreen => 1,
+        LobbyScreen => 2,
+        RoomScreen => 3,
+        CharacterSelectScreen => 4,
+        _ => -1
+    };
+
     private T SwitchTo<T>(PackedScene scene) where T : Node
     {
+        // 书页之间切换：先截下旧画面，切换后在最上层播放翻页（纯视觉，不影响切换逻辑）。
+        var oldBackground = BookBackground(_currentScreen);
+        var oldOrder = BookOrder(_currentScreen);
+        var oldShot = oldBackground != null && PageTurn.CanPlay(this) ? PageTurn.CaptureScreen(this) : null;
+
         if (_currentScreen != null)
         {
             if (_currentScreen is LobbyScreen lobby)
@@ -133,6 +160,14 @@ public partial class App : Control
         var next = scene.Instantiate<T>();
         _pageHost.AddChild(next);
         _currentScreen = next;
+
+        var newBackground = BookBackground(next);
+        if (oldShot != null && oldBackground != null && newBackground != null)
+        {
+            GetNodeOrNull<PageTurn>("PageTurn")?.QueueFree();
+            PageTurn.Play(this, oldShot, oldBackground, newBackground, BookOrder(next) >= oldOrder);
+        }
+
         return next;
     }
 

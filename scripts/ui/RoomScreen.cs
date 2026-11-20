@@ -37,6 +37,13 @@ public partial class RoomScreen : Control
     private Button _leaveYesButton = null!;
     private Button _leaveNoButton = null!;
 
+    private EntryBook.Tag _statusTag = null!;
+    private Label _hintLabel = null!;
+    private VBoxContainer _emptySeats = null!;
+    private Control _standees = null!;
+    private EntryBook.CapsuleKind? _actionKind;
+    private string? _actionIcon;
+
     private RoomDetailDto? _room;
     private bool _active;
     private bool _polling;
@@ -73,6 +80,7 @@ public partial class RoomScreen : Control
         _pollTimer.Timeout += () => _ = RefreshRoomAsync(false);
         _pollTimer.WaitTime = 2.0;
         _pollTimer.OneShot = false;
+        ApplyBookStyle();
         _leaveConfirm.Hide();
     }
 
@@ -162,10 +170,15 @@ public partial class RoomScreen : Control
     private void ApplyRoom(RoomDetailDto room)
     {
         _roomNameLabel.Text = room.RoomName;
-        _roomMetaLabel.Text = $"房间 ID：{room.RoomId}    人数：{room.CurrentPlayers}/{room.MaxPlayers}";
+        _roomMetaLabel.Text = $"房间 ID {room.RoomId}  ·  人数 {room.CurrentPlayers}/{room.MaxPlayers}  ·  房主 {room.OwnerNickname}";
         _ownerLabel.Text = $"房主：{room.OwnerNickname}";
         _roomStatusLabel.Text = $"状态：{RoomStatusText(room.Status)}";
+        _statusTag.Set(
+            string.Equals(room.Status, "WAITING", StringComparison.OrdinalIgnoreCase) ? EntryBook.TagKind.Waiting : EntryBook.TagKind.Playing,
+            RoomStatusText(room.Status));
         UpdateMemberRows(room);
+        UpdateEmptySeats(room);
+        UpdateStandees(room);
         UpdateActionButton();
     }
 
@@ -186,6 +199,7 @@ public partial class RoomScreen : Control
             }
 
             row.UpdateMember(member);
+            row.SetHighlighted(member.UserId == CurrentUserId);
             _memberList.MoveChild(row, index);
         }
 
@@ -213,12 +227,17 @@ public partial class RoomScreen : Control
         {
             _actionButton.Text = "开始游戏";
             _actionButton.Disabled = !RoomStateModel.CanOwnerStart(_room, CurrentUserId, _operationInProgress);
+            StyleAction(EntryBook.CapsuleKind.Primary, null);
+            _hintLabel.Text = RoomStateModel.CanOwnerStart(_room, CurrentUserId, false) ? "全员已准备，可以开始" : "等待所有玩家准备";
             return;
         }
 
         var isReady = RoomStateModel.IsReady(_room, CurrentUserId);
         _actionButton.Text = isReady ? "取消准备" : "准备";
         _actionButton.Disabled = _operationInProgress || !string.Equals(_room.Status, "WAITING", StringComparison.OrdinalIgnoreCase);
+        StyleAction(isReady ? EntryBook.CapsuleKind.Secondary : EntryBook.CapsuleKind.Primary, isReady ? "undo" : "check");
+        _hintLabel.Text = isReady ? "已准备，等待房主开始" : "准备好后点下方按钮";
+        EntryBook.RecenterIcon(_actionButton);
     }
 
     private void OnActionPressed()
@@ -435,11 +454,14 @@ public partial class RoomScreen : Control
 
     private void ShowStatus(string message, bool isError)
     {
-        _syncStatusLabel.Text = message;
-        _syncStatusLabel.AddThemeColorOverride(
-            "font_color",
-            isError ? new Color(0.72f, 0.16f, 0.11f) : new Color(0.18f, 0.38f, 0.48f)
-        );
+        if (string.IsNullOrWhiteSpace(message))
+        {
+            _syncStatusLabel.Text = "实时同步中";
+            _syncStatusLabel.AddThemeColorOverride("font_color", EntryBook.InkSoft);
+            return;
+        }
+
+        EntryBook.ShowStatus(_syncStatusLabel, message, isError);
     }
 
     private static string RoomStatusText(string status)

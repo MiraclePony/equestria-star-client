@@ -92,6 +92,7 @@ public partial class CharacterSelectScreen : Control
         _pollTimer.OneShot = false;
         _countdownTimer.WaitTime = 0.2;
         _countdownTimer.OneShot = false;
+        ApplyBookStyle();
     }
 
     public void Start()
@@ -333,7 +334,7 @@ public partial class CharacterSelectScreen : Control
         {
             _deadlineExpired = false;
             _countdownLabel.Text = "正在同步截止时间";
-            _countdownLabel.AddThemeColorOverride("font_color", new Color(0.18f, 0.38f, 0.48f));
+            _countdownLabel.AddThemeColorOverride("font_color", EntryBook.InfoInk);
             UpdateSelectionUi();
             return;
         }
@@ -343,14 +344,14 @@ public partial class CharacterSelectScreen : Control
         if (_deadlineExpired)
         {
             _countdownLabel.Text = "正在等待服务端开始游戏";
-            _countdownLabel.AddThemeColorOverride("font_color", new Color(0.72f, 0.16f, 0.11f));
+            _countdownLabel.AddThemeColorOverride("font_color", EntryBook.ErrorInk);
         }
         else
         {
             _countdownLabel.Text = $"选择角色 {remaining / 60:00}:{remaining % 60:00}";
             _countdownLabel.AddThemeColorOverride(
                 "font_color",
-                remaining <= 10 ? new Color(0.78f, 0.17f, 0.1f) : new Color(0.1f, 0.15f, 0.18f)
+                remaining <= 10 ? EntryBook.ErrorInk : EntryBook.Ink
             );
         }
 
@@ -792,10 +793,6 @@ public partial class CharacterSelectScreen : Control
 
     private void ShowNetworkStatus(string message, bool isError)
     {
-        _networkStatusLabel.Text = message;
-        _networkStatusLabel.AddThemeColorOverride(
-            "font_color",
-            isError ? new Color(0.72f, 0.16f, 0.11f) : new Color(0.18f, 0.38f, 0.48f)
-        );
+        EntryBook.ShowStatus(_networkStatusLabel, message, isError);
     }
 }

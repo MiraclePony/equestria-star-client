@@ -39,6 +39,7 @@ public partial class LoginScreen : Control
         _retryRecoveryButton = GetNode<Button>("CenterContainer/LoginPanel/FormMargin/Form/RetryRecoveryButton");
         _statusLabel = GetNode<Label>("CenterContainer/LoginPanel/FormMargin/Form/StatusLabel");
 
+        ApplyBookStyle();
         _passwordEdit.Secret = true;
         _togglePasswordButton.Pressed += OnTogglePassword;
         _loginButton.Pressed += OnLoginPressed;
@@ -66,7 +67,50 @@ public partial class LoginScreen : Control
     private void OnTogglePassword()
     {
         _passwordEdit.Secret = !_passwordEdit.Secret;
-        _togglePasswordButton.Text = _passwordEdit.Secret ? "显示" : "隐藏";
+        _togglePasswordButton.Icon = EntryBook.Icon(_passwordEdit.Secret ? "eye" : "eye_closed");
+        _togglePasswordButton.TooltipText = _passwordEdit.Secret ? "显示密码" : "隐藏密码";
+    }
+
+    /// <summary>扉页：左页隧道书（含悬挂标志），右页借阅卡插在书袋里。</summary>
+    private void ApplyBookStyle()
+    {
+        var stage = EntryBook.BuildStage(this, "login");
+        var page = EntryBook.RightPage["login"];
+        EntryBook.RunningHead(stage, page, "扉页");
+        EntryBook.Footer(stage, page);
+
+        var center = GetNode<CenterContainer>("CenterContainer");
+        EntryBook.PlaceOnStage(center, new Rect2(page.Position.X, page.Position.Y + 96, page.Size.X, page.Size.Y - 150));
+        var panel = GetNode<PanelContainer>("CenterContainer/LoginPanel");
+        EntryBook.DecorateCard(panel, 500, 204);
+        var margin = GetNode<MarginContainer>("CenterContainer/LoginPanel/FormMargin");
+        margin.AddThemeConstantOverride("margin_left", 46);
+        margin.AddThemeConstantOverride("margin_right", 46);
+        margin.AddThemeConstantOverride("margin_top", 36);
+        margin.AddThemeConstantOverride("margin_bottom", 96);
+        var form = GetNode<VBoxContainer>("CenterContainer/LoginPanel/FormMargin/Form");
+        form.AddThemeConstantOverride("separation", 16);
+
+        var title = form.GetNode<Label>("Title");
+        title.Text = "登录";
+        EntryBook.StyleCardTitle(title, 42);
+        form.GetNode<Label>("Subtitle").Visible = false;
+
+        EntryBook.StyleInput(_usernameEdit, "horseshoe");
+        EntryBook.StyleInput(_passwordEdit, "lock", rightPad: 58);
+        var passwordRow = form.GetNode<HBoxContainer>("PasswordRow");
+        passwordRow.AddThemeConstantOverride("separation", -54);
+        EntryBook.StyleIconButton(_togglePasswordButton, "eye", 46, "显示密码");
+        _togglePasswordButton.SizeFlagsVertical = SizeFlags.ShrinkCenter;
+
+        _statusLabel.CustomMinimumSize = new Vector2(0, 22);
+        _statusLabel.HorizontalAlignment = HorizontalAlignment.Center;
+        EntryBook.StyleLabel(_statusLabel, 16, EntryBook.InfoInk);
+        EntryBook.StyleCapsule(_loginButton, EntryBook.CapsuleKind.Primary, 60, 28);
+        EntryBook.StyleCapsule(_registerButton, EntryBook.CapsuleKind.Secondary, 52, 21);
+        EntryBook.StyleCapsule(_retryRecoveryButton, EntryBook.CapsuleKind.Secondary, 48, 19, "refresh");
+        _retryRecoveryButton.CustomMinimumSize = new Vector2(408, 48);
+        EntryBook.KeepIconBesideText(_retryRecoveryButton);
     }
 
     private async void OnLoginPressed()
@@ -224,7 +268,6 @@ public partial class LoginScreen : Control
 
     private void ShowStatus(string message, bool isError)
     {
-        _statusLabel.Text = message;
-        _statusLabel.AddThemeColorOverride("font_color", isError ? new Color(0.72f, 0.16f, 0.11f) : new Color(0.18f, 0.38f, 0.48f));
+        EntryBook.ShowStatus(_statusLabel, message, isError);
     }
 }
