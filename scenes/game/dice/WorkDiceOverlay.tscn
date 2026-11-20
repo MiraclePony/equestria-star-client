@@ -1,10 +1,14 @@
-[gd_scene load_steps=10 format=3]
+[gd_scene load_steps=11 format=3]
 
 [ext_resource type="Script" path="res://scripts/game/dice/WorkDiceOverlay.cs" id="1_overlay"]
+[ext_resource type="Texture2D" path="res://assets/art/ui/paper_hud/panels/drawer_cream.png" id="paper_tex"]
 [ext_resource type="PackedScene" path="res://scenes/game/dice/Dice3D.tscn" id="2_dice"]
 [ext_resource type="PackedScene" path="res://scenes/game/dice/DiceTray.tscn" id="3_tray"]
 [ext_resource type="Script" path="res://scripts/game/dice/DiceRollController.cs" id="4_controller"]
-[ext_resource type="Theme" path="res://assets/theme/client_theme.tres" id="5_theme"]
+[ext_resource type="Theme" path="res://assets/theme/ingame_paper_theme.tres" id="5_theme"]
+[ext_resource type="Texture2D" path="res://assets/art/ui/paper_hud/icons/check.png" id="icon_check"]
+[ext_resource type="Texture2D" path="res://assets/art/ui/paper_hud/icons/retry.png" id="icon_retry"]
+[ext_resource type="Texture2D" path="res://assets/art/ui/paper_hud/icons/roll.png" id="icon_roll"]
 
 [sub_resource type="Environment" id="Environment_work"]
 background_mode = 1
@@ -15,29 +19,26 @@ ambient_light_energy = 0.72
 reflected_light_source = 2
 tonemap_mode = 2
 
-[sub_resource type="StyleBoxFlat" id="StyleBox_panel"]
-bg_color = Color(0.035, 0.058, 0.068, 0.95)
-border_width_left = 1
-border_width_top = 1
-border_width_right = 1
-border_width_bottom = 1
-border_color = Color(0.25, 0.46, 0.5, 0.85)
-corner_radius_top_left = 7
-corner_radius_top_right = 7
-corner_radius_bottom_right = 7
-corner_radius_bottom_left = 7
-
-[sub_resource type="StyleBoxFlat" id="StyleBox_result"]
-bg_color = Color(0.045, 0.073, 0.083, 0.98)
-border_width_left = 2
-border_width_top = 2
-border_width_right = 2
-border_width_bottom = 2
-border_color = Color(0.78, 0.63, 0.25, 0.95)
-corner_radius_top_left = 9
-corner_radius_top_right = 9
-corner_radius_bottom_right = 9
-corner_radius_bottom_left = 9
+[sub_resource type="StyleBoxTexture" id="StyleBox_panel"]
+content_margin_left = 2.0
+content_margin_top = 2.0
+content_margin_right = 2.0
+content_margin_bottom = 2.0
+texture = ExtResource("paper_tex")
+texture_margin_left = 40.0
+texture_margin_top = 40.0
+texture_margin_right = 40.0
+texture_margin_bottom = 40.0
+[sub_resource type="StyleBoxTexture" id="StyleBox_result"]
+content_margin_left = 2.0
+content_margin_top = 2.0
+content_margin_right = 2.0
+content_margin_bottom = 2.0
+texture = ExtResource("paper_tex")
+texture_margin_left = 40.0
+texture_margin_top = 40.0
+texture_margin_right = 40.0
+texture_margin_bottom = 40.0
 
 [sub_resource type="StyleBoxFlat" id="StyleBox_button"]
 bg_color = Color(0.1, 0.29, 0.34, 0.98)
@@ -76,7 +77,7 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
-color = Color(0.012, 0.02, 0.024, 1)
+color = Color(0.22, 0.15, 0.1, 1)
 
 [node name="DiceViewportContainer" type="SubViewportContainer" parent="OverlayRoot"]
 layout_mode = 1
@@ -164,20 +165,20 @@ mouse_filter = 2
 theme_override_constants/separation = 18
 
 [node name="TitleLabel" type="Label" parent="OverlayRoot/AttributeSelectionAnchor/AttributePanel/AttributeMargin/Content"]
+theme_type_variation = &"PaperTitleLabel"
 layout_mode = 2
 mouse_filter = 2
 text = "选择打工属性"
 horizontal_alignment = 1
-theme_override_colors/font_color = Color(0.93, 0.97, 0.98, 1)
 theme_override_font_sizes/font_size = 28
 
 [node name="WorkLabel" type="Label" parent="OverlayRoot/AttributeSelectionAnchor/AttributePanel/AttributeMargin/Content"]
+theme_type_variation = &"PaperMutedLabel"
 layout_mode = 2
 mouse_filter = 2
 text = "当前位置\n难度：—　基础社交费用：—　基础成功奖励预览：—"
 horizontal_alignment = 1
 autowrap_mode = 3
-theme_override_colors/font_color = Color(0.75, 0.86, 0.89, 1)
 theme_override_font_sizes/font_size = 17
 
 [node name="AttributeGrid" type="GridContainer" parent="OverlayRoot/AttributeSelectionAnchor/AttributePanel/AttributeMargin/Content"]
@@ -191,59 +192,46 @@ columns = 3
 custom_minimum_size = Vector2(190, 56)
 layout_mode = 2
 text = "力量"
-theme_override_styles/normal = SubResource("StyleBox_button")
-theme_override_styles/hover = SubResource("StyleBox_button_hover")
 
 [node name="SpeedButton" type="Button" parent="OverlayRoot/AttributeSelectionAnchor/AttributePanel/AttributeMargin/Content/AttributeGrid"]
 custom_minimum_size = Vector2(190, 56)
 layout_mode = 2
 text = "速度"
-theme_override_styles/normal = SubResource("StyleBox_button")
-theme_override_styles/hover = SubResource("StyleBox_button_hover")
 
 [node name="SocialButton" type="Button" parent="OverlayRoot/AttributeSelectionAnchor/AttributePanel/AttributeMargin/Content/AttributeGrid"]
 custom_minimum_size = Vector2(190, 56)
 layout_mode = 2
 text = "社交"
-theme_override_styles/normal = SubResource("StyleBox_button")
-theme_override_styles/hover = SubResource("StyleBox_button_hover")
 
 [node name="CharmButton" type="Button" parent="OverlayRoot/AttributeSelectionAnchor/AttributePanel/AttributeMargin/Content/AttributeGrid"]
 custom_minimum_size = Vector2(190, 56)
 layout_mode = 2
 text = "魅力"
-theme_override_styles/normal = SubResource("StyleBox_button")
-theme_override_styles/hover = SubResource("StyleBox_button_hover")
 
 [node name="MagicButton" type="Button" parent="OverlayRoot/AttributeSelectionAnchor/AttributePanel/AttributeMargin/Content/AttributeGrid"]
 custom_minimum_size = Vector2(190, 56)
 layout_mode = 2
 text = "魔法"
-theme_override_styles/normal = SubResource("StyleBox_button")
-theme_override_styles/hover = SubResource("StyleBox_button_hover")
 
 [node name="MindButton" type="Button" parent="OverlayRoot/AttributeSelectionAnchor/AttributePanel/AttributeMargin/Content/AttributeGrid"]
 custom_minimum_size = Vector2(190, 56)
 layout_mode = 2
 text = "心智"
-theme_override_styles/normal = SubResource("StyleBox_button")
-theme_override_styles/hover = SubResource("StyleBox_button_hover")
 
 [node name="StatusLabel" type="Label" parent="OverlayRoot/AttributeSelectionAnchor/AttributePanel/AttributeMargin/Content"]
+theme_type_variation = &"PaperMutedLabel"
 layout_mode = 2
 mouse_filter = 2
 text = "请选择本次打工使用的具体属性。"
 horizontal_alignment = 1
 autowrap_mode = 3
-theme_override_colors/font_color = Color(1, 0.82, 0.36, 1)
 
 [node name="CancelButton" type="Button" parent="OverlayRoot/AttributeSelectionAnchor/AttributePanel/AttributeMargin/Content"]
+theme_type_variation = &"PaperSecondaryButton"
 custom_minimum_size = Vector2(220, 52)
 layout_mode = 2
 size_flags_horizontal = 4
 text = "取消"
-theme_override_styles/normal = SubResource("StyleBox_button")
-theme_override_styles/hover = SubResource("StyleBox_button_hover")
 
 [node name="InfoAnchor" type="MarginContainer" parent="OverlayRoot"]
 layout_mode = 1
@@ -275,19 +263,19 @@ mouse_filter = 2
 theme_override_constants/separation = 6
 
 [node name="TitleLabel" type="Label" parent="OverlayRoot/InfoAnchor/InfoPanel/InfoMargin/Info"]
+theme_type_variation = &"PaperTitleLabel"
 layout_mode = 2
 mouse_filter = 2
 text = "打工判定"
 horizontal_alignment = 1
-theme_override_colors/font_color = Color(0.9, 0.96, 0.97, 1)
 theme_override_font_sizes/font_size = 26
 
 [node name="StatusLabel" type="Label" parent="OverlayRoot/InfoAnchor/InfoPanel/InfoMargin/Info"]
+theme_type_variation = &"PaperMutedLabel"
 layout_mode = 2
 mouse_filter = 2
 text = "按住鼠标拖动，松开后投掷。"
 horizontal_alignment = 1
-theme_override_colors/font_color = Color(0.72, 0.86, 0.89, 1)
 theme_override_font_sizes/font_size = 17
 
 [node name="DetailLabel" type="Label" parent="OverlayRoot/InfoAnchor/InfoPanel/InfoMargin/Info"]
@@ -295,22 +283,20 @@ layout_mode = 2
 mouse_filter = 2
 text = "属性：—　难度：—"
 horizontal_alignment = 1
-theme_override_colors/font_color = Color(0.78, 0.88, 0.9, 1)
 
 [node name="DiceValueLabel" type="Label" parent="OverlayRoot/InfoAnchor/InfoPanel/InfoMargin/Info"]
 layout_mode = 2
 mouse_filter = 2
 text = "点数：—"
 horizontal_alignment = 1
-theme_override_colors/font_color = Color(1, 0.82, 0.36, 1)
 theme_override_font_sizes/font_size = 24
 
 [node name="DeadlineLabel" type="Label" parent="OverlayRoot/InfoAnchor/InfoPanel/InfoMargin/Info"]
+theme_type_variation = &"PaperMutedLabel"
 layout_mode = 2
 mouse_filter = 2
 text = "服务端期限：同步中"
 horizontal_alignment = 1
-theme_override_colors/font_color = Color(0.68, 0.78, 0.81, 1)
 
 [node name="DecisionAnchor" type="MarginContainer" parent="OverlayRoot"]
 layout_mode = 1
@@ -345,29 +331,27 @@ mouse_filter = 2
 theme_override_constants/separation = 12
 
 [node name="ConfirmButton" type="Button" parent="OverlayRoot/DecisionAnchor/DecisionPanel/DecisionMargin/Buttons"]
+icon = ExtResource("icon_check")
 custom_minimum_size = Vector2(160, 52)
 layout_mode = 2
 size_flags_horizontal = 3
 text = "确认"
-theme_override_styles/normal = SubResource("StyleBox_button")
-theme_override_styles/hover = SubResource("StyleBox_button_hover")
 
 [node name="RerollButton" type="Button" parent="OverlayRoot/DecisionAnchor/DecisionPanel/DecisionMargin/Buttons"]
+icon = ExtResource("icon_roll")
+theme_type_variation = &"PaperSecondaryButton"
 custom_minimum_size = Vector2(220, 52)
 layout_mode = 2
 size_flags_horizontal = 3
 text = "重投"
-theme_override_styles/normal = SubResource("StyleBox_button")
-theme_override_styles/hover = SubResource("StyleBox_button_hover")
 
 [node name="RecoveryRetryButton" type="Button" parent="OverlayRoot/DecisionAnchor/DecisionPanel/DecisionMargin/Buttons"]
+icon = ExtResource("icon_retry")
 visible = false
 custom_minimum_size = Vector2(240, 52)
 layout_mode = 2
 size_flags_horizontal = 3
 text = "重试同步"
-theme_override_styles/normal = SubResource("StyleBox_button")
-theme_override_styles/hover = SubResource("StyleBox_button_hover")
 
 [node name="ResultDismissArea" type="Control" parent="OverlayRoot" groups=["blocks_map_input"]]
 visible = false
@@ -412,5 +396,4 @@ text = "打工结果"
 horizontal_alignment = 1
 vertical_alignment = 1
 autowrap_mode = 3
-theme_override_colors/font_color = Color(0.92, 0.96, 0.97, 1)
 theme_override_font_sizes/font_size = 21

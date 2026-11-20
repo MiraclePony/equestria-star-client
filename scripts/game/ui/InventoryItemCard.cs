@@ -51,6 +51,14 @@ public partial class InventoryItemCard : VBoxContainer
         _nameLabel.Text = string.IsNullOrWhiteSpace(card.ItemName) ? $"道具 {card.ItemId}" : card.ItemName.Trim();
         _nameLabel.TooltipText = _nameLabel.Text;
         _actionButton.Text = actionText;
+        _actionButton.Icon = PaperHudArt.Icon(actionText switch
+        {
+            "使用" => "use",
+            "装备" => "equip",
+            "卸下" => "unequip",
+            _ when actionText.StartsWith("出售", System.StringComparison.Ordinal) => "sell",
+            _ => "check"
+        });
         _actionArea.Visible = true;
         _statusLabel.Visible = false;
         _actionButton.Disabled = PlayerItemId <= 0 || !availability.Enabled;

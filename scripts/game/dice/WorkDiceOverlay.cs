@@ -110,6 +110,7 @@ public partial class WorkDiceOverlay : CanvasLayer
         BindAttributeButton("MIND", "MindButton");
         _dice.RollStarted += OnRollStarted;
         _dice.RollCompleted += OnRollCompleted;
+        SetupPresentation();
         CloseOverlay();
     }
 
@@ -178,6 +179,7 @@ public partial class WorkDiceOverlay : CanvasLayer
         _deadlineLabel.Text = FormatDeadline(pendingCheck.ExpiresAt);
         _recoveryRetryButton.Visible = false;
         State = WorkDiceOverlayState.AwaitingRoll;
+        PresentPending(pendingCheck, true);
         StartFreshPhysicalRoll();
     }
 
@@ -197,6 +199,7 @@ public partial class WorkDiceOverlay : CanvasLayer
         _attributeStatusLabel.Text = "请选择本次打工使用的具体属性。";
         SetAttributeButtonsDisabled(false);
         _attributeCancelButton.Disabled = false;
+        HidePresentation();
         State = WorkDiceOverlayState.SelectingAttribute;
     }
 
@@ -224,6 +227,7 @@ public partial class WorkDiceOverlay : CanvasLayer
         _pendingCheck = pendingCheck;
         _detailLabel.Text = BuildCheckDetail(pendingCheck);
         _deadlineLabel.Text = FormatDeadline(pendingCheck.ExpiresAt);
+        PresentPending(pendingCheck, false);
         if (State == WorkDiceOverlayState.AwaitingDecision)
         {
             RefreshDecisionButtons();
@@ -239,6 +243,7 @@ public partial class WorkDiceOverlay : CanvasLayer
         _diceValueLabel.Text = "点数：—";
         _decisionPanel.Visible = false;
         State = WorkDiceOverlayState.AwaitingRoll;
+        PresentPending(pendingCheck, true);
         StartFreshPhysicalRoll();
     }
 
@@ -279,6 +284,7 @@ public partial class WorkDiceOverlay : CanvasLayer
         _statusLabel.Text = "判定恢复结束";
         _resultLabel.Text = $"{message}\n\n已刷新当前权威状态。点击任意位置返回游戏。";
         EnterResultState();
+        HideResultBanner();
     }
 
     public void ShowWorkResult(CheckRollResponseDto response)
@@ -300,6 +306,7 @@ public partial class WorkDiceOverlay : CanvasLayer
             $"社交余额：{work.RemainingSocial}\n基础社交费用：{work.SocialCost}" +
             pendingRewardLine + "\n\n点击任意位置返回游戏。";
         EnterResultState();
+        PresentCheckResult(response, "打工成功", "打工失败");
     }
 
     public void ShowForestMoveResult(CheckRollResponseDto response)
@@ -331,6 +338,7 @@ public partial class WorkDiceOverlay : CanvasLayer
             $"\n本次金币费用：{cost}\n金币余额：{balance}" +
             reason + message + "\n\n点击任意位置返回游戏。";
         EnterResultState();
+        PresentForestResult(moved, effective);
     }
 
     public void ShowQuestResult(CheckRollResponseDto response)
@@ -349,6 +357,7 @@ public partial class WorkDiceOverlay : CanvasLayer
             "任务目标将以重新查询的完整任务列表为准；判定成功不等于任务已提交或奖励已入账。\n\n" +
             "点击任意位置返回判定列表。";
         EnterResultState();
+        PresentCheckResult(response, "判定成功", "判定失败");
     }
 
     public void ShowPartnerRecruitResult(CheckRollResponseDto response)
@@ -369,6 +378,7 @@ public partial class WorkDiceOverlay : CanvasLayer
             $"伙伴招募判定{(success ? "成功" : "未成功")}\n{diceLine}\n{drawLine}\n" +
             "点击任意位置后查看服务端最新伙伴候选。";
         EnterResultState();
+        PresentCheckResult(response, "招募判定成功", "招募判定未成功");
     }
 
     public void CloseOverlay()
@@ -381,6 +391,7 @@ public partial class WorkDiceOverlay : CanvasLayer
         if (GodotObject.IsInstanceValid(_dice)) _dice.ResetDice();
         if (GodotObject.IsInstanceValid(_root)) _root.Visible = false;
         if (GodotObject.IsInstanceValid(_attributeSelectionAnchor)) _attributeSelectionAnchor.Visible = false;
+        HidePresentation();
     }
 
     private void StartFreshPhysicalRoll()
@@ -546,6 +557,7 @@ public partial class WorkDiceOverlay : CanvasLayer
         State = WorkDiceOverlayState.AwaitingDecision;
         _statusLabel.Text = "物理骰已停止。确认前不会上传点数。";
         _diceValueLabel.Text = $"点数：{value}";
+        PresentRoll(value);
         _decisionPanel.Visible = true;
         _confirmButton.Visible = true;
         _rerollButton.Visible = true;
@@ -580,7 +592,10 @@ public partial class WorkDiceOverlay : CanvasLayer
             return $"方向骰不使用六维属性　出发格：{from}　所选目标：{target}　方向索引：{direction}";
         }
 
-        var attribute = FirstNonEmpty(pending.AttributeType, "未知属性");
+        // 只做显示：枚举换成中文属性名，未知枚举原样显示。
+        var attribute = AttributeLook.TryGetValue(pending.AttributeType ?? "", out var look)
+            ? look.Text
+            : FirstNonEmpty(pending.AttributeType, "未知属性");
         var value = pending.AttributeValue?.ToString() ?? "-";
         var difficulty = pending.Difficulty?.ToString() ?? "-";
         return $"属性：{attribute}　有效属性值：{value}　难度：{difficulty}";

@@ -41,10 +41,10 @@ mouse_filter = 2
 text = "道具"
 horizontal_alignment = 1
 text_overrun_behavior = 3
-theme_override_colors/font_color = Color(0.92, 0.95, 0.96, 1)
 theme_override_font_sizes/font_size = 17
 
 [node name="StatusLabel" type="Label" parent="."]
+theme_type_variation = &"PaperMutedLabel"
 visible = false
 custom_minimum_size = Vector2(0, 48)
 layout_mode = 2
@@ -52,14 +52,13 @@ mouse_filter = 2
 text = "已装备"
 horizontal_alignment = 1
 vertical_alignment = 1
-theme_override_colors/font_color = Color(0.82, 0.78, 0.64, 1)
 theme_override_font_sizes/font_size = 16
 
 [node name="ActionArea" type="PanelContainer" parent="." groups=["blocks_map_input"]]
+theme_type_variation = &"PaperBarePanel"
 custom_minimum_size = Vector2(0, 48)
 layout_mode = 2
 mouse_filter = 0
-theme_override_styles/panel = SubResource("StyleBox_action")
 
 [node name="ActionButton" type="Button" parent="ActionArea"]
 custom_minimum_size = Vector2(0, 46)

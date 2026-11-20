@@ -1,6 +1,8 @@
 [gd_scene load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://scripts/game/ui/QuestTaskCard.cs" id="1_script"]
+[ext_resource type="Texture2D" path="res://assets/art/ui/paper_hud/icons/abandon.png" id="icon_abandon"]
+[ext_resource type="Texture2D" path="res://assets/art/ui/paper_hud/icons/submit.png" id="icon_submit"]
 
 [sub_resource type="StyleBoxFlat" id="Style_card"]
 bg_color = Color(0.055, 0.085, 0.095, 0.97)
@@ -15,9 +17,9 @@ corner_radius_bottom_right = 8
 corner_radius_bottom_left = 8
 
 [node name="QuestTaskCard" type="PanelContainer" groups=["blocks_map_input"]]
+theme_type_variation = &"PaperCardPanel"
 custom_minimum_size = Vector2(720, 0)
 mouse_filter = 0
-theme_override_styles/panel = SubResource("Style_card")
 script = ExtResource("1_script")
 
 [node name="Margin" type="MarginContainer" parent="."]
@@ -38,7 +40,6 @@ layout_mode = 2
 mouse_filter = 2
 text = "任务名称"
 autowrap_mode = 3
-theme_override_colors/font_color = Color(0.93, 0.83, 0.54, 1)
 theme_override_font_sizes/font_size = 22
 
 [node name="Objectives" type="VBoxContainer" parent="Margin/Content"]
@@ -52,6 +53,7 @@ mouse_filter = 2
 theme_override_constants/separation = 12
 
 [node name="SubmitButton" type="Button" parent="Margin/Content/Actions"]
+icon = ExtResource("icon_submit")
 custom_minimum_size = Vector2(130, 42)
 layout_mode = 2
 text = "提交"
@@ -62,6 +64,8 @@ size_flags_horizontal = 3
 mouse_filter = 2
 
 [node name="AbandonButton" type="Button" parent="Margin/Content/Actions"]
+icon = ExtResource("icon_abandon")
+theme_type_variation = &"PaperDangerButton"
 custom_minimum_size = Vector2(130, 42)
 layout_mode = 2
 text = "放弃"

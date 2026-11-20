@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://bycdk87hdlk2p"]
 
 [ext_resource type="Script" uid="uid://22brqfby4fua" path="res://scripts/game/ui/GameHud.cs" id="1_hud"]
-[ext_resource type="Theme" uid="uid://cn82v5pyl54f6" path="res://assets/theme/client_theme.tres" id="2_theme"]
+[ext_resource type="Theme" path="res://assets/theme/ingame_paper_theme.tres" id="2_theme"]
 [ext_resource type="PackedScene" path="res://scenes/game/ui/OtherPlayerHudEntry.tscn" id="3_entry"]
 [ext_resource type="Texture2D" uid="uid://bjdt1ttfba86o" path="res://assets/art/ui/paper_hud/panels/tag.png" id="11_turn_banner"]
 

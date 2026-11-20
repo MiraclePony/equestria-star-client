@@ -64,8 +64,8 @@ public partial class QuestTaskCard : PanelContainer
             };
             check.AddThemeFontSizeOverride("font_size", 22);
             check.AddThemeColorOverride("font_color", objective.Completed
-                ? new Color("d95c5c")
-                : new Color("9aa7aa"));
+                ? new Color("d0453a")
+                : new Color("b9a184"));
             var text = new Label
             {
                 Text = objective.Text + objective.ProgressText,
@@ -74,8 +74,8 @@ public partial class QuestTaskCard : PanelContainer
                 MouseFilter = MouseFilterEnum.Ignore
             };
             text.AddThemeColorOverride("font_color", objective.ProgressAvailable
-                ? new Color("e7eceb")
-                : new Color("e5b66f"));
+                ? PaperHudArt.Ink
+                : new Color("b07a3a"));
             row.AddChild(check);
             row.AddChild(text);
             _objectives.AddChild(row);

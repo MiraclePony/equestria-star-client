@@ -363,8 +363,8 @@ public partial class GameHud : CanvasLayer
         _connectionNoticeAnchor.Visible = !string.IsNullOrWhiteSpace(message);
         _connectionNoticeLabel.Text = message?.Trim() ?? "";
         _connectionNoticeLabel.Modulate = isError
-            ? new Color("b54d4d")
-            : new Color("1e404c");
+            ? new Color("9a3b2a")
+            : PaperHudArt.Ink;
     }
 
     private void ApplyPlayerView(PlayerViewResponseDto playerView, long currentUserId)

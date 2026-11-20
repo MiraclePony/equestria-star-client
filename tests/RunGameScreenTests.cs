@@ -919,7 +919,17 @@ public partial class RunGameScreenTests : SceneTree
 
     private async Task DispatchViewportClickAsync(Control control)
     {
-        await ToSignal(this, SignalName.ProcessFrame);
+        // 面板刚显示时容器布局（含居中）可能还要两三帧才排定；等控件位置连续 3 帧不变再点，避免点到尚未就位的位置。
+        var last = control.GetGlobalRect();
+        var stableFrames = 0;
+        for (var i = 0; i < 40 && stableFrames < 3; i++)
+        {
+            await ToSignal(this, SignalName.ProcessFrame);
+            var current = control.GetGlobalRect();
+            stableFrames = current == last && current.Size != Vector2.Zero ? stableFrames + 1 : 0;
+            last = current;
+        }
+
         var position = control.GetGlobalRect().GetCenter();
         Root.PushInput(new InputEventMouseMotion { Position = position, GlobalPosition = position }, true);
         await ToSignal(this, SignalName.ProcessFrame);
@@ -942,7 +952,7 @@ public partial class RunGameScreenTests : SceneTree
         await ToSignal(this, SignalName.ProcessFrame);
     }
 
-    private async Task WaitUntilAsync(Func<bool> condition)
+    private async Task WaitUntilAsync(Func<bool> condition, [System.Runtime.CompilerServices.CallerLineNumber] int line = 0)
     {
         for (var frame = 0; frame < 600 && !condition(); frame++)
         {
@@ -951,7 +961,7 @@ public partial class RunGameScreenTests : SceneTree
 
         if (!condition())
         {
-            _failures.Add("等待异步条件超时。");
+            _failures.Add($"等待异步条件超时（第 {line} 行）。");
         }
     }
 

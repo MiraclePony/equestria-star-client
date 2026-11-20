@@ -1,9 +1,13 @@
 [gd_scene load_steps=8 format=3]
 
 [ext_resource type="Script" path="res://scripts/game/ui/CardViewerOverlay.cs" id="1_overlay"]
-[ext_resource type="Theme" path="res://assets/theme/client_theme.tres" id="2_theme"]
+[ext_resource type="Theme" path="res://assets/theme/ingame_paper_theme.tres" id="2_theme"]
 [ext_resource type="PackedScene" path="res://scenes/game/ui/ReadOnlyQuestCard.tscn" id="3_personal_card"]
 [ext_resource type="PackedScene" path="res://scenes/game/ui/InventoryItemCard.tscn" id="4_item_card"]
+[ext_resource type="Texture2D" path="res://assets/art/ui/paper_hud/icons/check.png" id="icon_check"]
+[ext_resource type="Texture2D" path="res://assets/art/ui/paper_hud/icons/refresh.png" id="icon_refresh"]
+[ext_resource type="Texture2D" path="res://assets/art/ui/paper_hud/icons/retry.png" id="icon_retry"]
+[ext_resource type="Texture2D" path="res://assets/art/ui/paper_hud/icons/sell.png" id="icon_sell"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBox_loading"]
 bg_color = Color(0.945, 0.961, 0.968, 0.98)
@@ -72,7 +76,7 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
-color = Color(0.01, 0.018, 0.022, 0.78)
+color = Color(0.16, 0.1, 0.05, 0.55)
 
 [node name="Center" type="CenterContainer" parent="OverlayRoot"]
 layout_mode = 1
@@ -93,19 +97,19 @@ mouse_filter = 2
 theme_override_constants/separation = 12
 
 [node name="TitleLabel" type="Label" parent="OverlayRoot/Center/Layout"]
+theme_type_variation = &"PaperTitleLabel"
 layout_mode = 2
 mouse_filter = 2
 text = "公共任务板"
 horizontal_alignment = 1
-theme_override_colors/font_color = Color(0.95, 0.97, 0.98, 1)
 theme_override_font_sizes/font_size = 28
 
 [node name="HintLabel" type="Label" parent="OverlayRoot/Center/Layout"]
+theme_type_variation = &"PaperMutedLabel"
 layout_mode = 2
 mouse_filter = 2
 text = "只读查看 · 点击重试按钮以外的任意位置关闭"
 horizontal_alignment = 1
-theme_override_colors/font_color = Color(0.72, 0.8, 0.83, 1)
 theme_override_font_sizes/font_size = 15
 
 [node name="LoadingState" type="CenterContainer" parent="OverlayRoot/Center/Layout"]
@@ -117,7 +121,6 @@ mouse_filter = 2
 custom_minimum_size = Vector2(420, 112)
 layout_mode = 2
 mouse_filter = 2
-theme_override_styles/panel = SubResource("StyleBox_loading")
 
 [node name="LoadingLabel" type="Label" parent="OverlayRoot/Center/Layout/LoadingState/LoadingPanel"]
 layout_mode = 2
@@ -125,7 +128,6 @@ mouse_filter = 2
 text = "正在读取公共卡牌……"
 horizontal_alignment = 1
 vertical_alignment = 1
-theme_override_colors/font_color = Color(0.15, 0.27, 0.31, 1)
 theme_override_font_sizes/font_size = 19
 
 [node name="ContentState" type="VBoxContainer" parent="OverlayRoot/Center/Layout"]
@@ -142,16 +144,19 @@ alignment = 1
 theme_override_constants/separation = 12
 
 [node name="SellButton" type="Button" parent="OverlayRoot/Center/Layout/ContentState/ShopActions" groups=["blocks_map_input"]]
+icon = ExtResource("icon_sell")
 custom_minimum_size = Vector2(128, 44)
 layout_mode = 2
 text = "出售道具"
 
 [node name="RefreshButton" type="Button" parent="OverlayRoot/Center/Layout/ContentState/ShopActions" groups=["blocks_map_input"]]
+icon = ExtResource("icon_refresh")
 custom_minimum_size = Vector2(144, 44)
 layout_mode = 2
 text = "刷新货架"
 
 [node name="QuestRefreshButton" type="Button" parent="OverlayRoot/Center/Layout/ContentState/ShopActions" groups=["blocks_map_input"]]
+icon = ExtResource("icon_refresh")
 visible = false
 custom_minimum_size = Vector2(160, 44)
 layout_mode = 2
@@ -165,7 +170,6 @@ mouse_filter = 2
 text = "当前暂无卡牌。"
 horizontal_alignment = 1
 vertical_alignment = 1
-theme_override_colors/font_color = Color(0.9, 0.94, 0.95, 1)
 theme_override_font_sizes/font_size = 20
 
 [node name="CardRow" type="BoxContainer" parent="OverlayRoot/Center/Layout/ContentState"]
@@ -208,6 +212,7 @@ expand_mode = 1
 stretch_mode = 5
 
 [node name="ActionArea" type="PanelContainer" parent="OverlayRoot/Center/Layout/ContentState/CardRow/CardSlot1" groups=["blocks_map_input"]]
+theme_type_variation = &"PaperBarePanel"
 custom_minimum_size = Vector2(0, 48)
 layout_mode = 2
 mouse_filter = 0
@@ -237,6 +242,7 @@ expand_mode = 1
 stretch_mode = 5
 
 [node name="ActionArea" type="PanelContainer" parent="OverlayRoot/Center/Layout/ContentState/CardRow/CardSlot2" groups=["blocks_map_input"]]
+theme_type_variation = &"PaperBarePanel"
 custom_minimum_size = Vector2(0, 48)
 layout_mode = 2
 mouse_filter = 0
@@ -266,6 +272,7 @@ expand_mode = 1
 stretch_mode = 5
 
 [node name="ActionArea" type="PanelContainer" parent="OverlayRoot/Center/Layout/ContentState/CardRow/CardSlot3" groups=["blocks_map_input"]]
+theme_type_variation = &"PaperBarePanel"
 custom_minimum_size = Vector2(0, 48)
 layout_mode = 2
 mouse_filter = 0
@@ -285,7 +292,6 @@ mouse_filter = 2
 custom_minimum_size = Vector2(640, 150)
 layout_mode = 2
 mouse_filter = 2
-theme_override_styles/panel = SubResource("StyleBox_error")
 
 [node name="ErrorMargin" type="MarginContainer" parent="OverlayRoot/Center/Layout/ErrorState/ErrorPanel"]
 layout_mode = 2
@@ -301,15 +307,16 @@ mouse_filter = 2
 theme_override_constants/separation = 16
 
 [node name="ErrorLabel" type="Label" parent="OverlayRoot/Center/Layout/ErrorState/ErrorPanel/ErrorMargin/ErrorContent"]
+theme_type_variation = &"PaperErrorLabel"
 layout_mode = 2
 mouse_filter = 2
 text = "卡牌数据加载失败，请重试。"
 horizontal_alignment = 1
 autowrap_mode = 3
-theme_override_colors/font_color = Color(1, 0.84, 0.84, 1)
 theme_override_font_sizes/font_size = 18
 
 [node name="RetryButton" type="Button" parent="OverlayRoot/Center/Layout/ErrorState/ErrorPanel/ErrorMargin/ErrorContent"]
+icon = ExtResource("icon_retry")
 custom_minimum_size = Vector2(160, 46)
 layout_mode = 2
 size_flags_horizontal = 4
@@ -334,7 +341,7 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
-color = Color(0.005, 0.01, 0.014, 0.78)
+color = Color(0.16, 0.1, 0.05, 0.55)
 
 [node name="Center" type="CenterContainer" parent="OverlayRoot/DecisionLayer"]
 layout_mode = 1
@@ -349,7 +356,6 @@ mouse_filter = 2
 custom_minimum_size = Vector2(560, 0)
 layout_mode = 2
 mouse_filter = 0
-theme_override_styles/panel = SubResource("StyleBox_loading")
 
 [node name="Margin" type="MarginContainer" parent="OverlayRoot/DecisionLayer/Center/Panel"]
 layout_mode = 2
@@ -370,7 +376,6 @@ mouse_filter = 2
 text = "确定执行该操作吗？"
 horizontal_alignment = 1
 autowrap_mode = 3
-theme_override_colors/font_color = Color(0.12, 0.23, 0.27, 1)
 theme_override_font_sizes/font_size = 19
 
 [node name="ReplacementOptions" type="VBoxContainer" parent="OverlayRoot/DecisionLayer/Center/Panel/Margin/Content"]
@@ -385,11 +390,13 @@ alignment = 1
 theme_override_constants/separation = 12
 
 [node name="ConfirmButton" type="Button" parent="OverlayRoot/DecisionLayer/Center/Panel/Margin/Content/Actions"]
+icon = ExtResource("icon_check")
 custom_minimum_size = Vector2(160, 46)
 layout_mode = 2
 text = "确认"
 
 [node name="CancelButton" type="Button" parent="OverlayRoot/DecisionLayer/Center/Panel/Margin/Content/Actions"]
+theme_type_variation = &"PaperSecondaryButton"
 custom_minimum_size = Vector2(160, 46)
 layout_mode = 2
 text = "取消"

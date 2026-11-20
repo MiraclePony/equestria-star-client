@@ -199,7 +199,8 @@ public partial class QuestCheckOverlay : CanvasLayer
         var panel = new PanelContainer
         {
             CustomMinimumSize = new Vector2(0, 92),
-            MouseFilter = Control.MouseFilterEnum.Stop
+            MouseFilter = Control.MouseFilterEnum.Stop,
+            ThemeTypeVariation = "PaperCardPanel"
         };
         panel.AddToGroup("blocks_map_input");
         var margin = new MarginContainer();
@@ -217,7 +218,7 @@ public partial class QuestCheckOverlay : CanvasLayer
             TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis,
             TooltipText = task.QuestName
         };
-        title.AddThemeFontSizeOverride("font_size", 18);
+        title.AddThemeFontSizeOverride("font_size", 21);
         content.AddChild(title);
 
         foreach (var row in task.Rows)
@@ -243,7 +244,7 @@ public partial class QuestCheckOverlay : CanvasLayer
         {
             Text = $"{attributeText}　｜　难度 {difficulty}" + (row.Completed ? "　✓ 已完成" : ""),
             SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
-            Modulate = row.Completed ? new Color(0.65f, 0.68f, 0.7f) : Colors.White
+            Modulate = row.Completed ? new Color(0.72f, 0.66f, 0.6f) : Colors.White
         };
         line.AddChild(label);
 
@@ -264,6 +265,7 @@ public partial class QuestCheckOverlay : CanvasLayer
         var actionButton = new Button
         {
             Text = "判定",
+            Icon = PaperHudArt.Icon("roll"),
             CustomMinimumSize = new Vector2(100, 38),
             Disabled = !canSubmit,
             TooltipText = canSubmit

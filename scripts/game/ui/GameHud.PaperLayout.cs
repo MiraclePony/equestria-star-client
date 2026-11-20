@@ -973,9 +973,9 @@ public partial class GameHud
 
         _workButton = MakeMenuButton("WorkButton", "打工", "coin");
         _railwayButton = MakeMenuButton("RailwayButton", "铁路", "arrow_right");
-        _questCheckButton = MakeMenuButton("QuestCheckButton", "判定", "check");
-        _questSubmissionButton = MakeMenuButton("QuestSubmissionButton", "提交", "accept");
-        _partnerRecruitButton = MakeMenuButton("PartnerRecruitButton", "招募伙伴", "partner");
+        _questCheckButton = MakeMenuButton("QuestCheckButton", "判定", "roll");
+        _questSubmissionButton = MakeMenuButton("QuestSubmissionButton", "提交", "submit");
+        _partnerRecruitButton = MakeMenuButton("PartnerRecruitButton", "招募伙伴", "recruit");
         _workButton.Disabled = true;
         _railwayButton.Disabled = true;
         list.AddChild(_workButton);

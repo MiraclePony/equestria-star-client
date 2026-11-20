@@ -58,6 +58,7 @@ public partial class CardViewerOverlay
         _overlayRoot.AddChild(_drawerPaper);
         _overlayRoot.MoveChild(_drawerPaper, _centerContainer.GetIndex());
         _centerContainer.ItemRectChanged += SyncDrawerPaper;
+        _centerContainer.GetNode<Control>("Layout").ItemRectChanged += SyncDrawerPaper;
 
         foreach (var button in _actionButtons)
         {
@@ -79,7 +80,7 @@ public partial class CardViewerOverlay
     {
         var drawer = IsDrawerKind(kind);
         _drawerPresentation = drawer;
-        _drawerPaper.Visible = drawer;
+        _drawerPaper.Visible = true;
         _hintLabel.Visible = !drawer;
         _backdrop.Color = drawer ? new Color(0.16f, 0.1f, 0.05f, 0.16f) : _defaultBackdrop;
         _titleLabel.AddThemeColorOverride("font_color", drawer ? PaperHudArt.Ink : _defaultTitleColor);
@@ -157,6 +158,7 @@ public partial class CardViewerOverlay
             center.OffsetBottom = -42;
             center.GrowHorizontal = Control.GrowDirection.Both;
             center.GrowVertical = Control.GrowDirection.Both;
+            Callable.From(SyncDrawerPaper).CallDeferred();
             return;
         }
 
@@ -187,15 +189,24 @@ public partial class CardViewerOverlay
 
     private void SyncDrawerPaper()
     {
-        if (!GodotObject.IsInstanceValid(_drawerPaper) || !_drawerPresentation)
+        if (!GodotObject.IsInstanceValid(_drawerPaper))
         {
             return;
         }
 
-        var rect = _centerContainer.GetRect().Grow(DrawerPadding);
+        // 抽屉模式贴 Center；居中模式 Center 铺满全屏，改贴实际内容（标题 + 卡排）。
+        var layout = _centerContainer.GetNode<Control>("Layout");
+        var rect = _drawerPresentation
+            ? _centerContainer.GetRect().Grow(DrawerPadding)
+            : new Rect2(_centerContainer.Position + layout.Position, layout.Size).Grow(DrawerPadding + 10f);
         _drawerPaper.Position = rect.Position;
         _drawerPaper.Size = rect.Size;
-        var art = Kind == CardViewerKind.QuestBoard ? "drawer_lav" : "drawer_mint";
+        var art = Kind switch
+        {
+            CardViewerKind.QuestBoard => "drawer_lav",
+            CardViewerKind.ShopShelf => "drawer_mint",
+            _ => "drawer_cream"
+        };
         _drawerPaper.AddThemeStyleboxOverride("panel", PaperHudArt.NinePatch(PaperHudArt.Panel(art), 40, 0));
     }
 

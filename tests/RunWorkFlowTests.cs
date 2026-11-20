@@ -110,7 +110,7 @@ public partial class RunWorkFlowTests : SceneTree
         AssertTrue(screen.WorkDiceOverlay.ResultText.Contains("金币余额：12"), "结果页必须使用 coinsAfter");
         AssertTrue(screen.WorkDiceOverlay.ResultText.Contains("社交余额：2"), "结果页必须使用 remainingSocial");
 
-        await DispatchViewportClickAsync(new Vector2(30, 30));
+        await DismissResultByClickAsync();
         await WaitUntilAsync(() => !screen.WorkDiceOverlay.IsOpen);
         AssertTrue(screen.IsGameConnectionReady, "独立投骰期间连接租约必须保持活动");
         AssertTrue(transport.ConnectionRequestCount >= 1, "流程必须先建立对局连接");
@@ -160,7 +160,7 @@ public partial class RunWorkFlowTests : SceneTree
             screen.WorkDiceOverlay.ResultText.Contains("原判定已不再待处理，无法恢复详细结果"),
             "已知 WORK 不再 pending 时必须展示准确恢复边界"
         );
-        await DispatchViewportClickAsync(new Vector2(30, 30));
+        await DismissResultByClickAsync();
         await WaitUntilAsync(() => !screen.WorkDiceOverlay.IsOpen);
 
         transport.ReturnIncompleteWorkResult = true;
@@ -179,7 +179,7 @@ public partial class RunWorkFlowTests : SceneTree
         transport.ReturnIncompleteWorkResult = false;
         GD.Print("WORK_TEST_PHASE=legacy_cases_done");
 
-        await DispatchViewportClickAsync(new Vector2(30, 30));
+        await DismissResultByClickAsync();
         await WaitUntilAsync(() => !screen.WorkDiceOverlay.IsOpen);
         await VerifyAnyAttributeSelectionAsync(screen, transport);
         GD.Print("WORK_TEST_PHASE=any_cases_done");
@@ -309,8 +309,28 @@ public partial class RunWorkFlowTests : SceneTree
 
     private async Task DispatchViewportClickAsync(Control control)
     {
-        await ToSignal(this, SignalName.ProcessFrame);
+        // 面板刚显示时容器布局（含居中）可能还要两三帧才排定；等控件位置连续 3 帧不变再点，避免点到尚未就位的位置。
+        var last = control.GetGlobalRect();
+        var stableFrames = 0;
+        for (var i = 0; i < 40 && stableFrames < 3; i++)
+        {
+            await ToSignal(this, SignalName.ProcessFrame);
+            var current = control.GetGlobalRect();
+            stableFrames = current == last && current.Size != Vector2.Zero ? stableFrames + 1 : 0;
+            last = current;
+        }
+
         await DispatchViewportClickAsync(control.GetGlobalRect().GetCenter());
+    }
+
+    /// <summary>
+    /// 点击结果页任意位置关闭。结果页只接受“结果出现之后的新点击”（同一毫秒内的释放会被忽略，防止确认的释放顺带关闭结果），
+    /// 无界面测试一帧可能不到 1 毫秒，因此先等 50 毫秒真实时间，模拟玩家的新一次点击。
+    /// </summary>
+    private async Task DismissResultByClickAsync()
+    {
+        await ToSignal(CreateTimer(0.05), SceneTreeTimer.SignalName.Timeout);
+        await DispatchViewportClickAsync(new Vector2(30, 30));
     }
 
     private async Task DispatchViewportClickAsync(Vector2 position)
@@ -341,14 +361,14 @@ public partial class RunWorkFlowTests : SceneTree
         for (var i = 0; i < count; i++) await ToSignal(this, SignalName.ProcessFrame);
     }
 
-    private async Task WaitUntilAsync(Func<bool> condition, int frames = 900)
+    private async Task WaitUntilAsync(Func<bool> condition, int frames = 900, [System.Runtime.CompilerServices.CallerLineNumber] int line = 0)
     {
         for (var i = 0; i < frames; i++)
         {
             if (condition()) return;
             await ToSignal(this, SignalName.ProcessFrame);
         }
-        _failures.Add("等待条件超时。");
+        _failures.Add($"等待条件超时（第 {line} 行）。");
     }
 
     private void Finish()

@@ -1,7 +1,11 @@
 [gd_scene load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://scripts/game/ui/PartnerOverlay.cs" id="1_script"]
-[ext_resource type="Theme" path="res://assets/theme/client_theme.tres" id="2_theme"]
+[ext_resource type="Theme" path="res://assets/theme/ingame_paper_theme.tres" id="2_theme"]
+[ext_resource type="Texture2D" path="res://assets/art/ui/paper_hud/icons/abandon.png" id="icon_abandon"]
+[ext_resource type="Texture2D" path="res://assets/art/ui/paper_hud/icons/back.png" id="icon_back"]
+[ext_resource type="Texture2D" path="res://assets/art/ui/paper_hud/icons/check.png" id="icon_check"]
+[ext_resource type="Texture2D" path="res://assets/art/ui/paper_hud/icons/retry.png" id="icon_retry"]
 
 [node name="PartnerOverlay" type="CanvasLayer"]
 layer = 45
@@ -26,7 +30,7 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 0
-color = Color(0.055, 0.047, 0.073, 0.78)
+color = Color(0.16, 0.1, 0.05, 0.55)
 
 [node name="Center" type="CenterContainer" parent="Root"]
 layout_mode = 1
@@ -56,17 +60,21 @@ theme_override_constants/separation = 14
 layout_mode = 2
 
 [node name="Title" type="Label" parent="Root/Center/Panel/Margin/Layout/Header"]
+theme_type_variation = &"PaperTitleLabel"
 layout_mode = 2
 size_flags_horizontal = 3
 text = "伙伴"
 theme_override_font_sizes/font_size = 28
 
 [node name="CloseButton" type="Button" parent="Root/Center/Panel/Margin/Layout/Header"]
+theme_type_variation = &"PaperCloseButton"
 custom_minimum_size = Vector2(84, 42)
 layout_mode = 2
 text = "关闭"
 
 [node name="Status" type="Label" parent="Root/Center/Panel/Margin/Layout"]
+custom_minimum_size = Vector2(0, 48)
+theme_type_variation = &"PaperMutedLabel"
 layout_mode = 2
 text = "正在读取伙伴信息……"
 autowrap_mode = 3
@@ -88,18 +96,23 @@ alignment = 2
 theme_override_constants/separation = 10
 
 [node name="BackButton" type="Button" parent="Root/Center/Panel/Margin/Layout/Footer"]
+icon = ExtResource("icon_back")
+theme_type_variation = &"PaperSecondaryButton"
 visible = false
 custom_minimum_size = Vector2(110, 42)
 layout_mode = 2
 text = "返回候选"
 
 [node name="RetryButton" type="Button" parent="Root/Center/Panel/Margin/Layout/Footer"]
+icon = ExtResource("icon_retry")
 visible = false
 custom_minimum_size = Vector2(110, 42)
 layout_mode = 2
 text = "重试"
 
 [node name="AbandonButton" type="Button" parent="Root/Center/Panel/Margin/Layout/Footer"]
+icon = ExtResource("icon_abandon")
+theme_type_variation = &"PaperDangerButton"
 visible = false
 custom_minimum_size = Vector2(130, 42)
 layout_mode = 2
@@ -123,7 +136,7 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 0
-color = Color(0.03, 0.025, 0.04, 0.72)
+color = Color(0.16, 0.1, 0.05, 0.55)
 
 [node name="Panel" type="PanelContainer" parent="Root/ConfirmLayer"]
 custom_minimum_size = Vector2(560, 230)
@@ -154,11 +167,13 @@ alignment = 2
 theme_override_constants/separation = 12
 
 [node name="CancelButton" type="Button" parent="Root/ConfirmLayer/Panel/Margin/Content/Buttons"]
+theme_type_variation = &"PaperSecondaryButton"
 custom_minimum_size = Vector2(110, 42)
 layout_mode = 2
 text = "取消"
 
 [node name="ConfirmButton" type="Button" parent="Root/ConfirmLayer/Panel/Margin/Content/Buttons"]
+icon = ExtResource("icon_check")
 custom_minimum_size = Vector2(110, 42)
 layout_mode = 2
 text = "确认"

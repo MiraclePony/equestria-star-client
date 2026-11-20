@@ -1,7 +1,9 @@
 [gd_scene load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://scripts/game/ui/QuestCheckOverlay.cs" id="1_script"]
-[ext_resource type="Theme" path="res://assets/theme/client_theme.tres" id="2_theme"]
+[ext_resource type="Theme" path="res://assets/theme/ingame_paper_theme.tres" id="2_theme"]
+[ext_resource type="Texture2D" path="res://assets/art/ui/paper_hud/icons/back.png" id="icon_back"]
+[ext_resource type="Texture2D" path="res://assets/art/ui/paper_hud/icons/retry.png" id="icon_retry"]
 
 [node name="QuestCheckOverlay" type="CanvasLayer"]
 layer = 46
@@ -25,7 +27,7 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 0
-color = Color(0.01, 0.02, 0.025, 0.82)
+color = Color(0.16, 0.1, 0.05, 0.55)
 
 [node name="Center" type="CenterContainer" parent="OverlayRoot"]
 layout_mode = 1
@@ -58,6 +60,7 @@ layout_mode = 2
 mouse_filter = 2
 
 [node name="TitleLabel" type="Label" parent="OverlayRoot/Center/Panel/ContentMargin/Content/Header"]
+theme_type_variation = &"PaperTitleLabel"
 layout_mode = 2
 size_flags_horizontal = 3
 mouse_filter = 2
@@ -65,12 +68,14 @@ text = "任务判定"
 theme_override_font_sizes/font_size = 26
 
 [node name="CloseButton" type="Button" parent="OverlayRoot/Center/Panel/ContentMargin/Content/Header"]
+theme_type_variation = &"PaperCloseButton"
 custom_minimum_size = Vector2(96, 42)
 layout_mode = 2
 text = "关闭"
 
 [node name="StatusLabel" type="Label" parent="OverlayRoot/Center/Panel/ContentMargin/Content"]
-custom_minimum_size = Vector2(0, 32)
+theme_type_variation = &"PaperMutedLabel"
+custom_minimum_size = Vector2(0, 48)
 layout_mode = 2
 mouse_filter = 2
 text = "正在同步任务判定……"
@@ -97,6 +102,7 @@ vertical_alignment = 1
 theme_override_font_sizes/font_size = 20
 
 [node name="RetryButton" type="Button" parent="OverlayRoot/Center/Panel/ContentMargin/Content"]
+icon = ExtResource("icon_retry")
 visible = false
 custom_minimum_size = Vector2(160, 46)
 layout_mode = 2
@@ -131,6 +137,7 @@ mouse_filter = 2
 theme_override_constants/separation = 16
 
 [node name="TitleLabel" type="Label" parent="OverlayRoot/AttributeSelectionCenter/Panel/Margin/Content"]
+theme_type_variation = &"PaperTitleLabel"
 layout_mode = 2
 mouse_filter = 2
 text = "请选择本次判定属性"
@@ -176,6 +183,8 @@ layout_mode = 2
 text = "心智"
 
 [node name="BackButton" type="Button" parent="OverlayRoot/AttributeSelectionCenter/Panel/Margin/Content"]
+icon = ExtResource("icon_back")
+theme_type_variation = &"PaperSecondaryButton"
 custom_minimum_size = Vector2(160, 46)
 layout_mode = 2
 size_flags_horizontal = 4

@@ -266,7 +266,7 @@ public partial class QuestTargetSubmissionOverlay : CanvasLayer
 
     private Control BuildTaskCard(QuestTargetSubmissionTaskView task)
     {
-        var panel = new PanelContainer { CustomMinimumSize = new Vector2(0, 112), MouseFilter = Control.MouseFilterEnum.Stop };
+        var panel = new PanelContainer { CustomMinimumSize = new Vector2(0, 112), MouseFilter = Control.MouseFilterEnum.Stop, ThemeTypeVariation = "PaperCardPanel" };
         panel.AddToGroup("blocks_map_input");
         var margin = new MarginContainer();
         margin.AddThemeConstantOverride("margin_left", 16);
@@ -283,7 +283,7 @@ public partial class QuestTargetSubmissionOverlay : CanvasLayer
             TooltipText = task.QuestName,
             TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis
         };
-        title.AddThemeFontSizeOverride("font_size", 19);
+        title.AddThemeFontSizeOverride("font_size", 21);
         content.AddChild(title);
 
         var row = new HBoxContainer();
@@ -300,6 +300,7 @@ public partial class QuestTargetSubmissionOverlay : CanvasLayer
         var button = new Button
         {
             Text = task.TriggerType == QuestTargetSubmissionModel.SubmitItemTrigger ? "选择道具" : "提交",
+            Icon = PaperHudArt.Icon(task.TriggerType == QuestTargetSubmissionModel.SubmitItemTrigger ? "item" : "submit"),
             CustomMinimumSize = new Vector2(126, 42),
             Disabled = task.TriggerType == QuestTargetSubmissionModel.PayResourceTrigger && !task.CanExecute,
             TooltipText = task.TriggerType == QuestTargetSubmissionModel.SubmitItemTrigger
@@ -315,7 +316,7 @@ public partial class QuestTargetSubmissionOverlay : CanvasLayer
             {
                 Text = task.UnavailableReason,
                 AutowrapMode = TextServer.AutowrapMode.WordSmart,
-                Modulate = new Color(0.95f, 0.72f, 0.62f)
+                ThemeTypeVariation = "PaperErrorLabel"
             };
             content.AddChild(reason);
         }

@@ -144,7 +144,7 @@ public partial class PartnerOverlay : CanvasLayer
             row.AddChild(details);
 
             var dismissal = partner.Dismissal;
-            var button = new Button { Name = $"Dismiss_{partner.PlayerPartnerId}", Text = submitting ? "处理中……" : "遣散", CustomMinimumSize = new Vector2(110, 44) };
+            var button = new Button { Name = $"Dismiss_{partner.PlayerPartnerId}", Text = submitting ? "处理中……" : "遣散", CustomMinimumSize = new Vector2(110, 44), ThemeTypeVariation = "PaperDangerButton", Icon = PaperHudArt.Icon("dismiss"), SizeFlagsVertical = Control.SizeFlags.ShrinkCenter };
             button.Disabled = submitting || !writesSupported || dismissal?.CanExecute != true || partner.PlayerPartnerId is not > 0;
             button.TooltipText = button.Disabled
                 ? FirstNonEmpty(dismissal?.UnavailableReason, writesSupported ? "服务端未允许遣散该伙伴。" : "当前对局未启用新版伙伴写操作。")
@@ -207,6 +207,7 @@ public partial class PartnerOverlay : CanvasLayer
                 {
                     Name = $"Condition_{candidate.CardId}_{condition.ConditionIndex}",
                     Text = condition.DisplayText ?? condition.Method ?? "未命名方式",
+                    Icon = PaperHudArt.Icon("recruit"),
                     CustomMinimumSize = new Vector2(360, 42),
                     Disabled = submitting || !writesSupported || condition.CanExecute != true || condition.ConditionIndex is not > 0
                 };

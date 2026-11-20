@@ -286,16 +286,17 @@ public partial class QuestJournalOverlay : CanvasLayer
 
             var nameLabel = new Label
             {
-                Text = $"{display.ItemName}\n{display.ItemType}",
+                Text = $"{display.ItemName}\n{PaperDisplayText.ItemType(display.ItemType)}",
                 HorizontalAlignment = HorizontalAlignment.Center,
                 MouseFilter = Control.MouseFilterEnum.Ignore
             };
-            nameLabel.AddThemeColorOverride("font_color", new Color("e6ecea"));
+            nameLabel.AddThemeColorOverride("font_color", PaperHudArt.Ink);
             column.AddChild(nameLabel);
 
             var button = new Button
             {
                 Text = "领取",
+                Icon = PaperHudArt.Icon("check"),
                 TooltipText = display.CanExecute
                     ? "领取该候选"
                     : display.ExecuteReason
@@ -341,15 +342,17 @@ public partial class QuestJournalOverlay : CanvasLayer
             }
             var label = new Label
             {
-                Text = $"{FirstNonEmpty(item.ItemName, "未命名道具")}\n实例 ID：{item.PlayerItemId}\n位置：{FirstNonEmpty(item.LocationText, item.Location ?? "未知")}",
+                Text = $"{FirstNonEmpty(item.ItemName, "未命名道具")}\n实例 ID：{item.PlayerItemId}\n位置：{FirstNonEmpty(item.LocationText, PaperDisplayText.Location(item.Location))}",
                 SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
                 VerticalAlignment = VerticalAlignment.Center,
                 MouseFilter = Control.MouseFilterEnum.Ignore
             };
-            label.AddThemeColorOverride("font_color", new Color("e6ecea"));
+            label.AddThemeColorOverride("font_color", PaperHudArt.Ink);
             row.AddChild(label);
             var discard = new Button
             {
+                ThemeTypeVariation = "PaperDangerButton",
+                Icon = PaperHudArt.Icon("discard"),
                 Text = "丢弃",
                 TooltipText = discardAvailable ? "丢弃该持有实例" : reason,
                 CustomMinimumSize = new Vector2(110, 42)
@@ -616,7 +619,7 @@ public partial class QuestJournalOverlay : CanvasLayer
             VerticalAlignment = VerticalAlignment.Center,
             MouseFilter = Control.MouseFilterEnum.Ignore
         };
-        label.AddThemeColorOverride("font_color", new Color("e6ecea"));
+        label.AddThemeColorOverride("font_color", PaperHudArt.Ink);
         parent.AddChild(label);
     }
 
