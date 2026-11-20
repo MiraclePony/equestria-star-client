@@ -70,7 +70,17 @@ public partial class GameScreen : Control
     private long? _moveCurrentCellId;
     private CardViewerKind _cardViewerKind;
     private QuestOfferListResponseDto? _latestQuestOffers;
-    private PlayerQuestListResponseDto? _latestPersonalQuests;
+    private PlayerQuestListResponseDto? _latestPersonalQuestsValue;
+    private PlayerQuestListResponseDto? _latestPersonalQuests
+    {
+        get => _latestPersonalQuestsValue;
+        set
+        {
+            _latestPersonalQuestsValue = value;
+            OnPaperQuestSnapshotChanged(value);
+        }
+    }
+    private GameActionRequestDto? _unresolvedQuestBoardRefresh;
 
     private ApiClient ApiClient => GetNode<ApiClient>("/root/ApiClient");
     private Session Session => GetNode<Session>("/root/Session");
@@ -135,12 +145,18 @@ public partial class GameScreen : Control
         _hud.InventoryRequested += OnHudInventoryRequested;
         _hud.EquipmentRequested += OnEquipmentRequested;
         _hud.RailwayRequested += OnRailwayRequested;
+        ConnectPaperHudSignals();
         _cardViewer.Closed += OnCardViewerClosed;
         _cardViewer.RetryRequested += OnCardViewerRetryRequested;
         _cardViewer.CardActionPressed += OnCardActionPressed;
+        _cardViewer.ShopSellViewRequested += OnShopSellViewRequested;
+        _cardViewer.ShopRefreshRequested += OnShopRefreshRequested;
+        _cardViewer.ShopShelfBackRequested += OnShopShelfRequested;
+        _cardViewer.QuestBoardRefreshRequested += OnQuestBoardRefreshRequested;
         InitializeQuestSystem();
         InitializeQuestChecks();
         InitializeQuestTargetSubmissions();
+        InitializePartnerSystem();
         _mapScene.MapCellClicked += OnMapCellClicked;
         _mapScene.MapEmptyClicked += OnMapEmptyClicked;
         _mapScene.PlayerTokenClicked += OnPlayerTokenClicked;
@@ -176,6 +192,7 @@ public partial class GameScreen : Control
             _hud.InventoryRequested -= OnHudInventoryRequested;
             _hud.EquipmentRequested -= OnEquipmentRequested;
             _hud.RailwayRequested -= OnRailwayRequested;
+            DisconnectPaperHudSignals();
         }
 
         if (GodotObject.IsInstanceValid(_cardViewer))
@@ -183,11 +200,16 @@ public partial class GameScreen : Control
             _cardViewer.Closed -= OnCardViewerClosed;
             _cardViewer.RetryRequested -= OnCardViewerRetryRequested;
             _cardViewer.CardActionPressed -= OnCardActionPressed;
+            _cardViewer.ShopSellViewRequested -= OnShopSellViewRequested;
+            _cardViewer.ShopRefreshRequested -= OnShopRefreshRequested;
+            _cardViewer.ShopShelfBackRequested -= OnShopShelfRequested;
+            _cardViewer.QuestBoardRefreshRequested -= OnQuestBoardRefreshRequested;
         }
 
         DisposeQuestSystem();
         DisposeQuestChecks();
         DisposeQuestTargetSubmissions();
+        DisposePartnerSystem();
 
         if (GodotObject.IsInstanceValid(_mapScene))
         {
@@ -243,12 +265,15 @@ public partial class GameScreen : Control
         _cardViewerKind = CardViewerKind.None;
         _latestQuestOffers = null;
         _latestPersonalQuests = null;
+        _unresolvedQuestBoardRefresh = null;
         _shopStateVersionFloor = 0;
+        ResetPaperHudPreviews();
         ResetItemSystemForStart();
         ResetQuestSystemForStart();
         ResetWorkFlowForStart();
         ResetQuestChecksForStart();
         ResetQuestTargetSubmissionsForStart();
+        ResetPartnerSystemForStart();
         _cardViewer.CloseOverlay();
         _questJournal.ForceClose();
         _questTargetSubmissionOverlay.CloseOverlay(false);
@@ -296,6 +321,8 @@ public partial class GameScreen : Control
         StopQuestChecks();
         StopQuestTargetSubmissions();
         StopItemSystem();
+        StopPartnerSystem();
+        ResetPaperHudPreviews();
         _active = false;
         if (GodotObject.IsInstanceValid(_connectionLease))
         {
@@ -314,6 +341,7 @@ public partial class GameScreen : Control
         _movableCellsRequestInProgress = false;
         _cardRequestsInFlight = 0;
         _cardViewerKind = CardViewerKind.None;
+        _unresolvedQuestBoardRefresh = null;
         _cardQualificationStateVersion = -1;
         _openShopAccessAllowed = null;
         if (GodotObject.IsInstanceValid(_cardViewer))
@@ -432,6 +460,14 @@ public partial class GameScreen : Control
 
     public Task RetryCardViewerAsync()
     {
+        if (_unresolvedQuestBoardRefresh != null && _cardViewerKind == CardViewerKind.QuestBoard)
+        {
+            return RetryUnresolvedQuestBoardRefreshAsync();
+        }
+        if (_unresolvedShopWrite is { } unresolved && _cardViewerKind == unresolved.Source)
+        {
+            return RetryUnresolvedShopWriteAsync();
+        }
         return _cardViewerKind == CardViewerKind.None
             ? Task.CompletedTask
             : OpenCardViewerAsync(_cardViewerKind);
@@ -456,6 +492,19 @@ public partial class GameScreen : Control
         _openShopAccessAllowed = null;
         _cardQualificationStateVersion = _latestPlayerView?.StateVersion ?? -1;
         _cardViewer.OpenLoading(kind);
+        if (kind == CardViewerKind.QuestBoard && _unresolvedQuestBoardRefresh != null)
+        {
+            ShowUnresolvedQuestBoardRefresh();
+            return Task.CompletedTask;
+        }
+        if (_unresolvedShopWrite is { } unresolved
+            && (kind == unresolved.Source || kind == CardViewerKind.ShopShelf && unresolved.Source == CardViewerKind.ShopSell))
+        {
+            _cardViewerKind = unresolved.Source;
+            _cardViewer.OpenLoading(unresolved.Source);
+            ShowUnresolvedShopWrite(unresolved.Source);
+            return Task.CompletedTask;
+        }
         var requestSequence = ++_cardRequestSequence;
         var generation = _generation;
 
@@ -468,7 +517,8 @@ public partial class GameScreen : Control
         var needsActionQualification = kind is CardViewerKind.QuestBoard
             or CardViewerKind.ShopShelf
             or CardViewerKind.Inventory
-            or CardViewerKind.Equipment;
+            or CardViewerKind.Equipment
+            or CardViewerKind.ShopSell;
         if (needsActionQualification)
         {
             // 每次打开都重新读取资格；同步完成前按钮保持灰色，避免沿用旧回合或旧位置权限。
@@ -481,7 +531,7 @@ public partial class GameScreen : Control
             CardViewerKind.QuestBoard => LoadQuestBoardCoreAsync(_gameId, currentPlayer.PlayerId, generation, requestSequence),
             CardViewerKind.ShopShelf => LoadShopShelfCoreAsync(_gameId, currentPlayer.PlayerId, generation, requestSequence),
             CardViewerKind.PersonalQuests => LoadPersonalQuestsCoreAsync(_gameId, currentPlayer.PlayerId, generation, requestSequence),
-            CardViewerKind.Inventory or CardViewerKind.Equipment =>
+            CardViewerKind.Inventory or CardViewerKind.Equipment or CardViewerKind.ShopSell =>
                 LoadPlayerItemsForViewerCoreAsync(_gameId, currentPlayer.PlayerId, kind, generation, requestSequence),
             _ => Task.CompletedTask
         };
@@ -500,6 +550,7 @@ public partial class GameScreen : Control
             || _questAcceptSubmitting
             || _questSystemSubmitting
             || _itemSystemSubmitting
+            || _partnerSubmitting
             || IsWorkActionInProgress
             || _moveState == PlayerMoveState.SubmittingMove
             || _latestPlayerView == null)
@@ -539,6 +590,7 @@ public partial class GameScreen : Control
             || _questAcceptSubmitting
             || _questSystemSubmitting
             || _itemSystemSubmitting
+            || _partnerSubmitting
             || _endTurnSubmitting
             || IsWorkActionInProgress
             || _moveState == PlayerMoveState.SubmittingMove
@@ -576,6 +628,217 @@ public partial class GameScreen : Control
         return _questAcceptTask;
     }
 
+    private void OnQuestBoardRefreshRequested() => _ = SubmitQuestBoardRefreshAsync();
+
+    public Task SubmitQuestBoardRefreshAsync()
+    {
+        if (!_active
+            || !IsGameConnectionReady
+            || _questAcceptSubmitting
+            || _questSystemSubmitting
+            || _itemSystemSubmitting
+            || _partnerSubmitting
+            || _endTurnSubmitting
+            || IsWorkActionInProgress
+            || _moveState == PlayerMoveState.SubmittingMove
+            || _latestPlayerView == null
+            || _cardViewerKind != CardViewerKind.QuestBoard
+            || !_cardViewer.IsOpen
+            || _cardViewer.State != CardViewerState.Content
+            || !BuildQuestBoardRefreshAvailability().Enabled)
+        {
+            return _questAcceptTask;
+        }
+
+        _questAcceptSubmitting = true;
+        ExitMoveMode();
+        _hud.SetActionControlsLocked(true);
+        RefreshOpenCardActionAvailability();
+        _questAcceptTask = RevalidateAndSubmitQuestBoardRefreshAsync(_generation);
+        return _questAcceptTask;
+    }
+
+    private async Task RevalidateAndSubmitQuestBoardRefreshAsync(int generation)
+    {
+        var handedToWrite = false;
+        try
+        {
+            await RefreshPlayerViewAsync();
+            await RefreshAvailableActionsAsync(true);
+            if (!IsResponseCurrent(generation)
+                || _cardViewerKind != CardViewerKind.QuestBoard
+                || !_cardViewer.IsOpen
+                || _cardViewer.State != CardViewerState.Content
+                || !TryGetCurrentTurnPlayer(out var player))
+            {
+                if (IsResponseCurrent(generation))
+                {
+                    _cardViewer.ShowError(CardViewerKind.QuestBoard, "任务板刷新资格已变化，请重新确认。");
+                }
+                return;
+            }
+
+            var action = _latestAvailableActions.FirstOrDefault(candidate =>
+                string.Equals(candidate.ActionType, "REFRESH_QUEST_OFFERS", StringComparison.OrdinalIgnoreCase));
+            if (_availableActionsStateVersion != _latestPlayerView?.StateVersion || action?.Available != true)
+            {
+                _cardViewer.ShowError(
+                    CardViewerKind.QuestBoard,
+                    FirstNonEmpty(action?.ReasonText, action?.Reason, "当前不能刷新公共任务板。"));
+                return;
+            }
+
+            var request = new GameActionRequestDto
+            {
+                RequestId = CreateGameActionRequestId(),
+                PlayerId = player.PlayerId,
+                StateVersion = _latestPlayerView!.StateVersion,
+                ActionType = "REFRESH_QUEST_OFFERS",
+                Payload = new JsonObject()
+            };
+            handedToWrite = true;
+            await SubmitQuestBoardRefreshCoreAsync(_gameId, request, generation, true);
+        }
+        finally
+        {
+            if (!handedToWrite && IsResponseCurrent(generation))
+            {
+                _questAcceptSubmitting = false;
+                _hud.SetActionControlsLocked(false);
+                RefreshOpenCardActionAvailability();
+            }
+        }
+    }
+
+    private async Task SubmitQuestBoardRefreshCoreAsync(
+        long gameId,
+        GameActionRequestDto request,
+        int generation,
+        bool allowAutomaticRetry)
+    {
+        var result = await SendQuestBoardRefreshOnceAsync(gameId, request);
+        if (allowAutomaticRetry
+            && IsUnknownQuestBoardRefreshResult(result)
+            && await WaitForIdempotentReplayAsync(generation))
+        {
+            result = await SendQuestBoardRefreshOnceAsync(gameId, request);
+        }
+
+        try
+        {
+            if (!IsResponseCurrent(generation)) return;
+            if (!result.Ok || result.Data == null)
+            {
+                _unresolvedQuestBoardRefresh = IsUnknownQuestBoardRefreshResult(result) ? request : null;
+                InvalidateAvailableActions();
+                await RefreshPlayerViewAsync();
+                await RefreshAvailableActionsAsync(true);
+                if (_unresolvedQuestBoardRefresh != null)
+                {
+                    ShowUnresolvedQuestBoardRefresh();
+                }
+                else
+                {
+                    _cardViewer.ShowError(
+                        CardViewerKind.QuestBoard,
+                        FirstNonEmpty(result.Message, null, "公共任务板刷新失败。"));
+                }
+                return;
+            }
+
+            _unresolvedQuestBoardRefresh = null;
+            if ((result.Data.GameId > 0 && result.Data.GameId != gameId)
+                || (!string.IsNullOrWhiteSpace(result.Data.ActionType)
+                    && !string.Equals(result.Data.ActionType, "REFRESH_QUEST_OFFERS", StringComparison.OrdinalIgnoreCase)))
+            {
+                _cardViewer.ShowError(CardViewerKind.QuestBoard, "服务器返回了不匹配的任务板刷新结果。");
+                return;
+            }
+
+            _stateVersionFloor = Math.Max(_stateVersionFloor, result.Data.NewStateVersion);
+            InvalidateAvailableActions();
+            if (result.Data.PlayerViewState != null
+                && ValidatePlayerView(result.Data.PlayerViewState, gameId, _currentUserId, out _)
+                && !IsOlderPlayerView(result.Data.PlayerViewState))
+            {
+                ApplyPlayerView(result.Data.PlayerViewState, false);
+            }
+            await RefreshPlayerViewToVersionFloorAsync();
+            if (result.Data.NextAvailableActions != null && _latestPlayerView?.StateVersion == result.Data.NewStateVersion)
+            {
+                ApplyAvailableActions(result.Data.NextAvailableActions, result.Data.NewStateVersion);
+            }
+            else
+            {
+                await RefreshAvailableActionsAsync(true);
+            }
+
+            var sequence = ++_cardRequestSequence;
+            _cardViewer.OpenLoading(CardViewerKind.QuestBoard);
+            _cardRequestsInFlight++;
+            var refreshError = await RefreshQuestOffersSnapshotAsync(gameId, request.PlayerId, generation, sequence, false);
+            if (!string.IsNullOrWhiteSpace(refreshError)
+                && IsCardResponseCurrent(generation, sequence, CardViewerKind.QuestBoard))
+            {
+                _cardViewer.ShowError(CardViewerKind.QuestBoard, $"任务板已刷新，但{refreshError}");
+            }
+        }
+        finally
+        {
+            if (IsResponseCurrent(generation))
+            {
+                _questAcceptSubmitting = false;
+                _hud.SetActionControlsLocked(false);
+                RefreshOpenCardActionAvailability();
+            }
+        }
+    }
+
+    private async Task<ApiResult<GameActionResponseDto>> SendQuestBoardRefreshOnceAsync(
+        long gameId,
+        GameActionRequestDto request)
+    {
+        try
+        {
+            return await ApiClient.SubmitGameActionAsync(gameId, request);
+        }
+        catch (Exception exception)
+        {
+            return ApiResult<GameActionResponseDto>.Failure(
+                $"任务板刷新请求异常：{exception.Message}",
+                "QUEST_BOARD_REFRESH_REQUEST_EXCEPTION");
+        }
+    }
+
+    private static bool IsUnknownQuestBoardRefreshResult(ApiResult<GameActionResponseDto> result) =>
+        IsRecoverableUnknownResult(result, "QUEST_BOARD_REFRESH_REQUEST_EXCEPTION");
+
+    private void ShowUnresolvedQuestBoardRefresh() =>
+        _cardViewer.ShowError(
+            CardViewerKind.QuestBoard,
+            "上次任务板刷新自动恢复后结果仍未知，可继续用同一次请求确认结果。",
+            "恢复原操作");
+
+    private Task RetryUnresolvedQuestBoardRefreshAsync()
+    {
+        if (_unresolvedQuestBoardRefresh is not { } request
+            || _questAcceptSubmitting
+            || _questSystemSubmitting
+            || _itemSystemSubmitting
+            || !IsGameConnectionReady
+            || !TryGetCurrentPlayer(out var player)
+            || player.PlayerId != request.PlayerId)
+        {
+            return _questAcceptTask;
+        }
+
+        _questAcceptSubmitting = true;
+        _hud.SetActionControlsLocked(true);
+        _cardViewer.OpenLoading(CardViewerKind.QuestBoard);
+        _questAcceptTask = SubmitQuestBoardRefreshCoreAsync(_gameId, request, _generation, false);
+        return _questAcceptTask;
+    }
+
     public bool TryEnterMoveMode(long playerId)
     {
         if (!_active
@@ -585,6 +848,7 @@ public partial class GameScreen : Control
             || _questAcceptSubmitting
             || _questSystemSubmitting
             || _itemSystemSubmitting
+            || _partnerSubmitting
             || IsWorkActionInProgress
             || _latestPlayerView == null)
         {
@@ -623,6 +887,7 @@ public partial class GameScreen : Control
             || _questAcceptSubmitting
             || _questSystemSubmitting
             || _itemSystemSubmitting
+            || _partnerSubmitting
             || IsWorkActionInProgress
             || _latestPlayerView == null
             || !TryGetCurrentTurnPlayer(out var currentPlayer)
@@ -686,6 +951,7 @@ public partial class GameScreen : Control
             || _questAcceptSubmitting
             || _questSystemSubmitting
             || _itemSystemSubmitting
+            || _partnerSubmitting
             || IsWorkActionInProgress
             || !TryGetCurrentTurnPlayer(out var currentPlayer)
             || currentPlayer.PlayerId != _movePlayerId)
@@ -1127,6 +1393,7 @@ public partial class GameScreen : Control
                         cards!,
                         BuildCardActionAvailability(CardViewerKind.QuestBoard)
                     );
+                    RefreshOpenQuestBoardActions();
                 }
             }
 
@@ -1302,6 +1569,7 @@ public partial class GameScreen : Control
                 cards,
                 BuildCardActionAvailability(CardViewerKind.QuestBoard)
             );
+            RefreshOpenQuestBoardActions();
         }
         finally
         {
@@ -1378,6 +1646,7 @@ public partial class GameScreen : Control
                 cards,
                 BuildCardActionAvailability(CardViewerKind.ShopShelf)
             );
+            RefreshOpenShopActions();
         }
         finally
         {
@@ -1872,12 +2141,14 @@ public partial class GameScreen : Control
             _shopStateVersionFloor = Math.Max(_shopStateVersionFloor, playerView.StateVersion);
         }
         _hud.RefreshPlayerView(playerView, _currentUserId);
+        HandlePlayerViewForPaperHud(playerView);
         _mapScene.SyncPlayerTokens(playerView, _currentUserId);
         HandlePlayerViewForWork(playerView);
         HandlePlayerViewForQuestChecks(playerView);
         HandlePlayerViewForQuestSystem(playerView);
         HandlePlayerViewForItemSystem(playerView);
         HandlePlayerViewForQuestTargetSubmissions(playerView);
+        HandlePlayerViewForPartnerSystem(playerView);
         _hasPlayerView = true;
         LastPlayerViewError = "";
         _hudErrorState.Visible = false;
@@ -2075,9 +2346,57 @@ public partial class GameScreen : Control
         );
     }
 
+    private CardActionAvailability BuildQuestBoardRefreshAvailability()
+    {
+        if (_unresolvedQuestBoardRefresh != null)
+        {
+            return new CardActionAvailability(false, "请先确认上次任务板刷新结果。");
+        }
+        if (!_active || !IsGameConnectionReady || _latestPlayerView == null)
+        {
+            return new CardActionAvailability(false, "对局连接或玩家状态尚未就绪。");
+        }
+        if (!string.Equals(_latestPlayerView.GameStatus, "RUNNING", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(_latestPlayerView.EngineState?.PausedReason, "ALL_OFFLINE", StringComparison.Ordinal))
+        {
+            return new CardActionAvailability(false, "当前对局状态不允许刷新任务板。");
+        }
+        if (_latestPlayerView.CurrentTurnUserId != _currentUserId)
+        {
+            return new CardActionAvailability(false, "当前不是你的回合。");
+        }
+        if (_questAcceptSubmitting || _questSystemSubmitting || _itemSystemSubmitting
+            || _endTurnSubmitting || IsWorkActionInProgress || _moveState == PlayerMoveState.SubmittingMove)
+        {
+            return new CardActionAvailability(false, "正在处理其他业务行动……");
+        }
+        if (_availableActionsStateVersion != _latestPlayerView.StateVersion)
+        {
+            return new CardActionAvailability(false,
+                _availableActionsRequestInProgress ? "正在同步操作资格……" : "操作资格同步失败，请稍后重试。");
+        }
+
+        var action = _latestAvailableActions.FirstOrDefault(candidate =>
+            string.Equals(candidate.ActionType, "REFRESH_QUEST_OFFERS", StringComparison.OrdinalIgnoreCase));
+        return action?.Available == true
+            ? new CardActionAvailability(true, "消耗 1 社交点刷新整个公共任务板。")
+            : new CardActionAvailability(false,
+                FirstNonEmpty(action?.ReasonText, action?.Reason, "当前不能刷新公共任务板。"));
+    }
+
+    private void RefreshOpenQuestBoardActions()
+    {
+        if (_cardViewerKind == CardViewerKind.QuestBoard
+            && _cardViewer.IsOpen
+            && _cardViewer.State == CardViewerState.Content)
+        {
+            _cardViewer.UpdateQuestBoardRefresh(BuildQuestBoardRefreshAvailability());
+        }
+    }
+
     private void RefreshOpenCardActionAvailability()
     {
-        if (_cardViewerKind is CardViewerKind.Inventory or CardViewerKind.Equipment)
+        if (_cardViewerKind is CardViewerKind.Inventory or CardViewerKind.Equipment or CardViewerKind.ShopSell)
         {
             RefreshOpenItemActionAvailability();
             return;
@@ -2092,6 +2411,8 @@ public partial class GameScreen : Control
         }
 
         _cardViewer.UpdateActionAvailability(BuildCardActionAvailability(_cardViewerKind));
+        RefreshOpenShopActions();
+        RefreshOpenQuestBoardActions();
     }
 
     private void RefreshOpenShopQualificationIfNeeded(long stateVersion)
@@ -2273,6 +2594,9 @@ public partial class GameScreen : Control
                 break;
             case CardViewerKind.ShopShelf:
                 _ = SubmitShopPurchaseAsync(primaryId, secondaryId);
+                break;
+            case CardViewerKind.ShopSell:
+                _ = SubmitShopSellAsync(primaryId);
                 break;
             case CardViewerKind.Inventory:
                 _ = SubmitInventoryItemActionAsync(primaryId, secondaryId);

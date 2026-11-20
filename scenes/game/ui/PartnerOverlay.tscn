@@ -1,0 +1,165 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/game/ui/PartnerOverlay.cs" id="1_script"]
+[ext_resource type="Theme" path="res://assets/theme/client_theme.tres" id="2_theme"]
+
+[node name="PartnerOverlay" type="CanvasLayer"]
+layer = 45
+script = ExtResource("1_script")
+
+[node name="Root" type="Control" parent="." groups=["blocks_map_input"]]
+visible = false
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 0
+theme = ExtResource("2_theme")
+
+[node name="Backdrop" type="ColorRect" parent="Root"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 0
+color = Color(0.055, 0.047, 0.073, 0.78)
+
+[node name="Center" type="CenterContainer" parent="Root"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 1
+
+[node name="Panel" type="PanelContainer" parent="Root/Center"]
+custom_minimum_size = Vector2(940, 620)
+layout_mode = 2
+
+[node name="Margin" type="MarginContainer" parent="Root/Center/Panel"]
+layout_mode = 2
+theme_override_constants/margin_left = 28
+theme_override_constants/margin_top = 22
+theme_override_constants/margin_right = 28
+theme_override_constants/margin_bottom = 22
+
+[node name="Layout" type="VBoxContainer" parent="Root/Center/Panel/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="Header" type="HBoxContainer" parent="Root/Center/Panel/Margin/Layout"]
+layout_mode = 2
+
+[node name="Title" type="Label" parent="Root/Center/Panel/Margin/Layout/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "伙伴"
+theme_override_font_sizes/font_size = 28
+
+[node name="CloseButton" type="Button" parent="Root/Center/Panel/Margin/Layout/Header"]
+custom_minimum_size = Vector2(84, 42)
+layout_mode = 2
+text = "关闭"
+
+[node name="Status" type="Label" parent="Root/Center/Panel/Margin/Layout"]
+layout_mode = 2
+text = "正在读取伙伴信息……"
+autowrap_mode = 3
+
+[node name="Scroll" type="ScrollContainer" parent="Root/Center/Panel/Margin/Layout"]
+custom_minimum_size = Vector2(0, 470)
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="Content" type="VBoxContainer" parent="Root/Center/Panel/Margin/Layout/Scroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 12
+
+[node name="Footer" type="HBoxContainer" parent="Root/Center/Panel/Margin/Layout"]
+layout_mode = 2
+alignment = 2
+theme_override_constants/separation = 10
+
+[node name="BackButton" type="Button" parent="Root/Center/Panel/Margin/Layout/Footer"]
+visible = false
+custom_minimum_size = Vector2(110, 42)
+layout_mode = 2
+text = "返回候选"
+
+[node name="RetryButton" type="Button" parent="Root/Center/Panel/Margin/Layout/Footer"]
+visible = false
+custom_minimum_size = Vector2(110, 42)
+layout_mode = 2
+text = "重试"
+
+[node name="AbandonButton" type="Button" parent="Root/Center/Panel/Margin/Layout/Footer"]
+visible = false
+custom_minimum_size = Vector2(130, 42)
+layout_mode = 2
+text = "放弃本批候选"
+
+[node name="ConfirmLayer" type="CenterContainer" parent="Root"]
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 0
+
+[node name="Shade" type="ColorRect" parent="Root/ConfirmLayer"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 0
+color = Color(0.03, 0.025, 0.04, 0.72)
+
+[node name="Panel" type="PanelContainer" parent="Root/ConfirmLayer"]
+custom_minimum_size = Vector2(560, 230)
+layout_mode = 2
+
+[node name="Margin" type="MarginContainer" parent="Root/ConfirmLayer/Panel"]
+layout_mode = 2
+theme_override_constants/margin_left = 28
+theme_override_constants/margin_top = 24
+theme_override_constants/margin_right = 28
+theme_override_constants/margin_bottom = 24
+
+[node name="Content" type="VBoxContainer" parent="Root/ConfirmLayer/Panel/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 18
+
+[node name="Message" type="Label" parent="Root/ConfirmLayer/Panel/Margin/Content"]
+layout_mode = 2
+size_flags_vertical = 3
+text = "确定执行该操作吗？"
+horizontal_alignment = 1
+vertical_alignment = 1
+autowrap_mode = 3
+
+[node name="Buttons" type="HBoxContainer" parent="Root/ConfirmLayer/Panel/Margin/Content"]
+layout_mode = 2
+alignment = 2
+theme_override_constants/separation = 12
+
+[node name="CancelButton" type="Button" parent="Root/ConfirmLayer/Panel/Margin/Content/Buttons"]
+custom_minimum_size = Vector2(110, 42)
+layout_mode = 2
+text = "取消"
+
+[node name="ConfirmButton" type="Button" parent="Root/ConfirmLayer/Panel/Margin/Content/Buttons"]
+custom_minimum_size = Vector2(110, 42)
+layout_mode = 2
+text = "确认"
+

@@ -48,6 +48,69 @@ public static class CardArtCatalog
             [1018] = "res://assets/cards/items/蹄铁新.jpg"
         };
 
+    public const string PartnerCardBackPath = "res://assets/cards/partners/伙伴卡背.jpg";
+
+    /// <summary>
+    /// 伙伴卡按服务端 partnerCode 绑定。代码同时接受正式 P_ 前缀和同值短码，
+    /// 仅用于同一张稳定资源映射，不按中文名称猜测业务身份。
+    /// </summary>
+    public static IReadOnlyDictionary<string, string> PartnerCodeArtPaths { get; } = BuildPartnerCodeMap();
+
+    private static Dictionary<string, string> BuildPartnerCodeMap()
+    {
+        var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        void Add(string code, string file)
+        {
+            var path = $"res://assets/cards/partners/{file}";
+            map[code] = path;
+            map[$"P_{code}"] = path;
+        }
+
+        Add("AB", "AB.jpg");
+        Add("AJ", "AJ新.jpg");
+        Add("BB", "BB新.jpg");
+        Add("BM", "BM.jpg");
+        Add("CC", "CC.jpg");
+        Add("CG", "CG.jpg");
+        Add("CS", "CS新.jpg");
+        Add("DD", "DD新.jpg");
+        Add("DH", "DH新.jpg");
+        Add("DJ", "DJ.jpg");
+        Add("DOC", "DOC.jpg");
+        Add("DT", "DT.jpg");
+        Add("FL", "FL.jpg");
+        Add("FS", "FS新.jpg");
+        Add("GS", "GS新.jpg");
+        Add("LH", "LH新.jpg");
+        Add("MP", "MP新.jpg");
+        Add("MR", "MR.jpg");
+        Add("OCT", "OCT.jpg");
+        Add("PCD", "PCD.jpg");
+        Add("PC", "PC新.jpg");
+        Add("PL", "PL.jpg");
+        Add("PP", "PP新.jpg");
+        Add("RD", "RD新.jpg");
+        Add("RR", "RR新.jpg");
+        Add("SA", "SA.jpg");
+        Add("SB", "SB.jpg");
+        Add("SL", "SL.jpg");
+        Add("SP", "SP.jpg");
+        Add("SS", "SS新.jpg");
+        Add("TS", "TS新.jpg");
+        Add("TX", "TX新.jpg");
+        Add("ZC", "ZC.jpg");
+        Add("SG", "sg没改.jpg");
+
+        // CORE_9 正式 partnerCode。保留上方短码与 P_ 旧别名，避免旧快照丢图。
+        map["BIG_MAC"] = "res://assets/cards/partners/BM.jpg";
+        map["PRINCESS_LUNA"] = "res://assets/cards/partners/PL.jpg";
+        map["SWEETIE_BELLE"] = "res://assets/cards/partners/SB.jpg";
+        map["LYRA"] = "res://assets/cards/partners/LH新.jpg";
+        map["CHEESE_SANDWICH"] = "res://assets/cards/partners/CS新.jpg";
+        map["SCOOTALOO"] = "res://assets/cards/partners/SL.jpg";
+        return map;
+    }
+
     private static readonly Dictionary<string, Texture2D> TextureCache = new(StringComparer.Ordinal);
 
     public static bool TryGetQuestTexture(string? questCode, out Texture2D? texture, out string error)
@@ -68,6 +131,34 @@ public static class CardArtCatalog
         if (!ItemArtPaths.TryGetValue(itemId, out var path))
         {
             error = $"道具 {itemId} 没有本地卡图映射。";
+            return false;
+        }
+
+        return TryLoad(path, out texture, out error);
+    }
+
+    public static bool TryGetPartnerTexture(string? partnerCode, string? partnerName, out Texture2D? texture, out string error)
+    {
+        texture = null;
+        if (string.IsNullOrWhiteSpace(partnerCode)
+            || !PartnerCodeArtPaths.TryGetValue(partnerCode.Trim(), out var path))
+        {
+            TryLoad(PartnerCardBackPath, out texture, out _);
+            error = $"伙伴 {partnerCode ?? partnerName ?? "<空>"} 没有本地 partnerCode 卡图映射，暂用卡背。";
+            return false;
+        }
+
+        return TryLoad(path, out texture, out error);
+    }
+
+    public static bool TryGetCharacterTexture(string? characterCode, out Texture2D? texture, out string error)
+    {
+        texture = null;
+        if (string.IsNullOrWhiteSpace(characterCode)
+            || !EquestriaStar.State.CharacterSelectionModel.KnownCardPaths.TryGetValue(characterCode.Trim(), out var path))
+        {
+            TryLoad(EquestriaStar.State.CharacterSelectionModel.CardBackPath, out texture, out _);
+            error = $"角色 {characterCode ?? "<空>"} 没有本地卡图映射，暂用卡背。";
             return false;
         }
 

@@ -71,10 +71,7 @@ public partial class GameHudDemo : Control
     private bool VerifyDemoBinding()
     {
         var currentNickname = _hud.GetNode<Label>(
-            "HudRoot/LeftMargin/LeftRail/CurrentPlayerPanel/NameRibbon/NicknameLabel"
-        );
-        var currentCoins = _hud.GetNode<Label>(
-            "HudRoot/LeftMargin/LeftRail/CurrentPlayerPanel/StatusContent/CoinsBox/CoinsValue"
+            "HudRoot/BottomBar/BarContent/CurrentPlayerPanel/AvatarPlaceholder/NameRibbon/NicknameLabel"
         );
         var playerList = _hud.GetNode<VBoxContainer>(
             "HudRoot/LeftMargin/LeftRail/OtherPlayersPanel/OtherPlayersScroll/OtherPlayersList"
@@ -84,12 +81,13 @@ public partial class GameHudDemo : Control
         var originalCoins = currentPlayer.Coins;
         currentPlayer.Coins = 19;
         _hud.RefreshPlayerView(_view, CurrentUserId);
-        var refreshSucceeded = currentCoins.Text == "19";
+        var refreshSucceeded = _hud.CurrentCoinsText == "19";
         currentPlayer.Coins = originalCoins;
         _hud.RefreshPlayerView(_view, CurrentUserId);
 
         _hud.BindPlayerView(_view, CurrentUserId);
-        var otherEntries = playerList.GetChildren().OfType<OtherPlayerHudEntry>().ToList();
+        var otherEntries = playerList.GetChildren().OfType<OtherPlayerHudEntry>()
+            .Where(entry => entry.Player?.UserId != CurrentUserId).ToList();
         var succeeded = refreshSucceeded
             && currentNickname.Text == "星辉旅人"
             && _hud.BoundCurrentUserId == CurrentUserId

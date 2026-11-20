@@ -8,10 +8,9 @@ namespace EquestriaStar.Game.UI;
 
 public partial class GameHud : CanvasLayer
 {
-    private const float RightButtonScale = 1.75f;
-
+    // 折纸版按 1920×1080 设计画布排版，默认不再整体缩小。
     [Export(PropertyHint.Range, "0.5,1.75,0.025")]
-    public float HudScale { get; set; } = 0.875f;
+    public float HudScale { get; set; } = 1.0f;
 
     private Control _hudRoot = null!;
 
@@ -45,6 +44,12 @@ public partial class GameHud : CanvasLayer
     [Signal]
     public delegate void QuestSubmissionRequestedEventHandler();
 
+    [Signal]
+    public delegate void PartnerRecruitRequestedEventHandler();
+
+    [Signal]
+    public delegate void PartnersRequestedEventHandler();
+
     [Export]
     public PackedScene? OtherPlayerEntryScene { get; set; }
 
@@ -77,6 +82,7 @@ public partial class GameHud : CanvasLayer
     private Button _railwayButton = null!;
     private Button _questCheckButton = null!;
     private Button _questSubmissionButton = null!;
+    private Button _partnerRecruitButton = null!;
     private readonly Dictionary<string, Label> _currentAttributeLabels = [];
     private readonly Dictionary<string, Label> _detailAttributeLabels = [];
     private PlayerViewResponseDto? _pendingPlayerView;
@@ -113,6 +119,7 @@ public partial class GameHud : CanvasLayer
     public Button RailwayButton => _railwayButton;
     public Button QuestCheckButton => _questCheckButton;
     public Button QuestSubmissionButton => _questSubmissionButton;
+    public Button PartnerRecruitButton => _partnerRecruitButton;
     public Button ActionMenuButton => _actionMenuButton;
     public bool WorkDisabled => !GodotObject.IsInstanceValid(_workButton) || _workButton.Disabled;
     public bool IsActionMenuOpen => GodotObject.IsInstanceValid(_actionMenuPanel) && _actionMenuPanel.Visible;
@@ -123,17 +130,11 @@ public partial class GameHud : CanvasLayer
         _hudRoot.AnchorRight = 1.0f / HudScale;
         _hudRoot.AnchorBottom = 1.0f / HudScale;
         _hudRoot.Scale = Vector2.One * HudScale;
-        KeepRightButtonScale(_hudRoot.GetNode<Control>("TopRightAnchor"));
-        KeepRightButtonScale(_hudRoot.GetNode<Control>("ActionMenuAnchor"));
-        KeepRightButtonScale(_hudRoot.GetNode<Control>("BottomActionsAnchor"));
 
-        _currentNicknameLabel = GetNode<Label>("HudRoot/LeftMargin/LeftRail/CurrentPlayerPanel/NameRibbon/NicknameLabel");
-        _currentAvatarNameLabel = GetNode<Label>("HudRoot/LeftMargin/LeftRail/CurrentPlayerPanel/AvatarPlaceholder/AvatarNameLabel");
-        _coinsValueLabel = GetNode<Label>("HudRoot/LeftMargin/LeftRail/CurrentPlayerPanel/StatusContent/CoinsBox/CoinsValue");
-        _prestigeValueLabel = GetNode<Label>("HudRoot/LeftMargin/LeftRail/CurrentPlayerPanel/StatusContent/PrestigeBox/PrestigeValue");
-        _emptyOtherPlayersLabel = GetNode<Label>("HudRoot/LeftMargin/LeftRail/OtherPlayersPanel/OtherPlayersScroll/OtherPlayersList/EmptyLabel");
-        _otherPlayersScroll = GetNode<ScrollContainer>("HudRoot/LeftMargin/LeftRail/OtherPlayersPanel/OtherPlayersScroll");
-        _otherPlayersList = GetNode<VBoxContainer>("HudRoot/LeftMargin/LeftRail/OtherPlayersPanel/OtherPlayersScroll/OtherPlayersList");
+        // 折纸风版式在代码中构建（左侧名牌、底栏、右侧拉手、顶部抽屉、行为菜单），
+        // 同时给下面这些字段赋值：玩家列表、底栏标签、全部入口按钮。
+        BuildPaperLayout();
+
         _detailPanel = GetNode<PanelContainer>("HudRoot/PlayerDetailPanel");
         _detailNicknameLabel = GetNode<Label>("HudRoot/PlayerDetailPanel/ContentMargin/Content/NicknameLabel");
         _detailCoinsValueLabel = GetNode<Label>("HudRoot/PlayerDetailPanel/ContentMargin/Content/ResourceRow/CoinsValue");
@@ -142,33 +143,20 @@ public partial class GameHud : CanvasLayer
         _turnNoticeLabel = GetNode<Label>("HudRoot/TurnNoticeAnchor/TurnNoticePanel/TurnNoticeLabel");
         _connectionNoticeAnchor = GetNode<Control>("HudRoot/ConnectionNoticeAnchor");
         _connectionNoticeLabel = GetNode<Label>("HudRoot/ConnectionNoticeAnchor/ConnectionNoticePanel/ConnectionNoticeLabel");
-        _endTurnAnchor = GetNode<Control>("HudRoot/ActionMenuAnchor/ActionMenu/MenuPanel/MenuMargin/Menu/EndTurnSlot");
-        _endTurnButton = GetNode<Button>("HudRoot/ActionMenuAnchor/ActionMenu/MenuPanel/MenuMargin/Menu/EndTurnSlot/EndTurnButton");
-        _questBoardButton = GetNode<Button>("HudRoot/TopRightAnchor/TopRight/PublicButtons/QuestBoardButton");
-        _shopShelfButton = GetNode<Button>("HudRoot/TopRightAnchor/TopRight/PublicButtons/ShopShelfButton");
-        _personalQuestsButton = GetNode<Button>("HudRoot/BottomActionsAnchor/Buttons/QuestsButton");
-        _inventoryButton = GetNode<Button>("HudRoot/BottomActionsAnchor/Buttons/ItemsButton");
-        _equipmentButton = GetNode<Button>("HudRoot/BottomActionsAnchor/Buttons/EquipmentButton");
-        _partnersButton = GetNode<Button>("HudRoot/BottomActionsAnchor/Buttons/PartnersButton");
-        _actionMenuPanel = GetNode<Control>("HudRoot/ActionMenuAnchor/ActionMenu/MenuPanel");
-        _actionMenuButton = GetNode<Button>("HudRoot/ActionMenuAnchor/ActionMenu/ActionMenuButton");
-        _workButton = GetNode<Button>("HudRoot/ActionMenuAnchor/ActionMenu/MenuPanel/MenuMargin/Menu/WorkButton");
-        _railwayButton = GetNode<Button>("HudRoot/ActionMenuAnchor/ActionMenu/MenuPanel/MenuMargin/Menu/RailwayButton");
-        _questCheckButton = GetNode<Button>("HudRoot/ActionMenuAnchor/ActionMenu/MenuPanel/MenuMargin/Menu/QuestCheckButton");
-        _questSubmissionButton = GetNode<Button>("HudRoot/ActionMenuAnchor/ActionMenu/MenuPanel/MenuMargin/Menu/QuestSubmissionButton");
         _endTurnButton.Pressed += OnEndTurnPressed;
         _questBoardButton.Pressed += OnQuestBoardPressed;
         _shopShelfButton.Pressed += OnShopShelfPressed;
         _personalQuestsButton.Pressed += OnPersonalQuestsPressed;
         _inventoryButton.Pressed += OnInventoryPressed;
         _equipmentButton.Pressed += OnEquipmentPressed;
+        _partnersButton.Pressed += OnPartnersPressed;
         _actionMenuButton.Pressed += OnActionMenuPressed;
         _workButton.Pressed += OnWorkPressed;
         _railwayButton.Pressed += OnRailwayPressed;
         _questCheckButton.Pressed += OnQuestCheckPressed;
         _questSubmissionButton.Pressed += OnQuestSubmissionPressed;
+        _partnerRecruitButton.Pressed += OnPartnerRecruitPressed;
 
-        BindAttributeLabels(_currentAttributeLabels, "HudRoot/LeftMargin/LeftRail/CurrentPlayerPanel/StatusContent/AttributesGrid");
         BindAttributeLabels(_detailAttributeLabels, "HudRoot/PlayerDetailPanel/ContentMargin/Content/AttributesGrid");
 
         if (_pendingPlayerView != null)
@@ -181,23 +169,12 @@ public partial class GameHud : CanvasLayer
         }
     }
 
-    private void KeepRightButtonScale(Control group)
-    {
-        // 保持按钮组与屏幕锚点的距离，内部布局仍按原尺寸计算。
-        var ratio = RightButtonScale / HudScale;
-        var width = group.OffsetRight - group.OffsetLeft;
-        var height = group.OffsetBottom - group.OffsetTop;
-        var left = group.OffsetLeft * ratio;
-        var top = group.OffsetTop * ratio;
-        group.OffsetLeft = left;
-        group.OffsetTop = top;
-        group.OffsetRight = left + width;
-        group.OffsetBottom = top + height;
-        group.Scale = Vector2.One * ratio;
-    }
 
     public override void _ExitTree()
     {
+        if (GodotObject.IsInstanceValid(_chatHandle)) _chatHandle.Pressed -= OnChatHandlePressed;
+        if (GodotObject.IsInstanceValid(_historyHandle)) _historyHandle.Pressed -= OnHistoryHandlePressed;
+
         if (GodotObject.IsInstanceValid(_endTurnButton))
         {
             _endTurnButton.Pressed -= OnEndTurnPressed;
@@ -220,12 +197,14 @@ public partial class GameHud : CanvasLayer
 
         if (GodotObject.IsInstanceValid(_inventoryButton)) _inventoryButton.Pressed -= OnInventoryPressed;
         if (GodotObject.IsInstanceValid(_equipmentButton)) _equipmentButton.Pressed -= OnEquipmentPressed;
+        if (GodotObject.IsInstanceValid(_partnersButton)) _partnersButton.Pressed -= OnPartnersPressed;
 
         if (GodotObject.IsInstanceValid(_actionMenuButton)) _actionMenuButton.Pressed -= OnActionMenuPressed;
         if (GodotObject.IsInstanceValid(_workButton)) _workButton.Pressed -= OnWorkPressed;
         if (GodotObject.IsInstanceValid(_railwayButton)) _railwayButton.Pressed -= OnRailwayPressed;
         if (GodotObject.IsInstanceValid(_questCheckButton)) _questCheckButton.Pressed -= OnQuestCheckPressed;
         if (GodotObject.IsInstanceValid(_questSubmissionButton)) _questSubmissionButton.Pressed -= OnQuestSubmissionPressed;
+        if (GodotObject.IsInstanceValid(_partnerRecruitButton)) _partnerRecruitButton.Pressed -= OnPartnerRecruitPressed;
     }
 
     public void BindPlayerView(PlayerViewResponseDto playerView, long currentUserId)
@@ -328,6 +307,7 @@ public partial class GameHud : CanvasLayer
         _connectionReady = ready;
         if (IsNodeReady())
         {
+            ApplySyncIndicator(ready);
             RefreshTurnPresentation();
         }
     }
@@ -417,17 +397,22 @@ public partial class GameHud : CanvasLayer
             SetAttributes(_currentAttributeLabels, currentPlayer.EffectiveAttributes);
         }
 
-        var otherPlayers = players
-            .Where(player => player.UserId != currentUserId)
+        ApplySelfAvatar(currentPlayer);
+        ApplyRound(playerView);
+
+        // 左侧名牌按真实回合顺序列出全部玩家（含本人），当前行动者放大。
+        var orderedPlayers = players
             .OrderBy(player => player.TurnOrder)
             .ThenBy(player => player.UserId)
             .ToList();
+        var otherPlayers = orderedPlayers.Where(player => player.UserId != currentUserId).ToList();
 
         OtherPlayerCount = otherPlayers.Count;
         _emptyOtherPlayersLabel.Visible = otherPlayers.Count == 0;
         _emptyOtherPlayersLabel.Text = otherPlayers.Count == 0 ? "暂无其他玩家" : "";
-        SynchronizeOtherPlayerEntries(otherPlayers);
-        ResizeOtherPlayersScroll(otherPlayers.Count);
+        SynchronizeOtherPlayerEntries(orderedPlayers);
+        ApplyTurnStates(orderedPlayers, playerView, currentUserId);
+        ResizeOtherPlayersScroll(orderedPlayers.Count);
 
         RefreshTurnPresentation();
     }
@@ -563,6 +548,7 @@ public partial class GameHud : CanvasLayer
         _questCheckButton.TooltipText = "查看当前已接任务中的主动判定。";
         _questSubmissionButton.Disabled = false;
         _questSubmissionButton.TooltipText = "查看当前已接任务中的道具交付与资源支付。";
+        RefreshPartnerRecruitPresentation();
         _workButton.Text = _workSubmitting ? "正在准备……" : "打工";
         _railwayButton.Text = _railwaySelecting ? "铁路（选择中）" : "铁路";
         RefreshRailwayPresentation();
@@ -742,6 +728,44 @@ public partial class GameHud : CanvasLayer
         _workButton.TooltipText = reason;
     }
 
+    private void RefreshPartnerRecruitPresentation()
+    {
+        _partnerRecruitButton.Text = "招募伙伴";
+        _partnerRecruitButton.Disabled = true;
+        var view = _pendingPlayerView;
+        if (view == null || _pendingCurrentUserId <= 0)
+        {
+            _partnerRecruitButton.TooltipText = "正在同步玩家状态……";
+            return;
+        }
+        if (view.EngineState?.PartnerRecruitmentVersion != 1)
+        {
+            _partnerRecruitButton.TooltipText = "当前对局未启用新版伙伴招募。";
+            return;
+        }
+        if (!_connectionReady || _actionControlsLocked)
+        {
+            _partnerRecruitButton.TooltipText = !_connectionReady ? "正在建立对局连接……" : "正在处理其他业务行动……";
+            return;
+        }
+        if (_availableActionsStateVersion != view.StateVersion)
+        {
+            _partnerRecruitButton.TooltipText = "正在同步招募资格……";
+            return;
+        }
+        var action = _availableActions.FirstOrDefault(item =>
+            string.Equals(item.ActionType, "DRAW_PARTNER_OFFER", StringComparison.OrdinalIgnoreCase));
+        if (action == null)
+        {
+            _partnerRecruitButton.TooltipText = "服务端未返回招募伙伴资格。";
+            return;
+        }
+        _partnerRecruitButton.Disabled = !action.Available;
+        _partnerRecruitButton.TooltipText = action.Available
+            ? "准备伙伴招募判定。"
+            : FirstNonEmpty(action.ReasonText, action.Reason, "当前不能招募伙伴。");
+    }
+
     private void SynchronizeOtherPlayerEntries(IReadOnlyList<PlayerViewPlayerDto> players)
     {
         var retainedKeys = new HashSet<long>();
@@ -848,13 +872,15 @@ public partial class GameHud : CanvasLayer
 
     private void ResizeOtherPlayersScroll(int playerCount)
     {
-        const float entryHeight = 77.0f;
-        const float separation = 5.0f;
+        // 一块当前行动名牌（更高）+ 其余普通名牌；超出底栏以上的可用高度时滚动。
+        const float entryHeight = OtherPlayerHudEntry.NormalHeight;
+        const float currentExtra = OtherPlayerHudEntry.CurrentHeight - OtherPlayerHudEntry.NormalHeight;
+        const float separation = 22.0f;
         const float emptyHeight = 66.0f;
-        const float maximumHeight = 255.0f;
+        const float maximumHeight = 700.0f;
         var contentHeight = playerCount <= 0
             ? emptyHeight
-            : playerCount * entryHeight + Math.Max(0, playerCount - 1) * separation;
+            : playerCount * entryHeight + currentExtra + Math.Max(0, playerCount - 1) * separation;
         _otherPlayersScroll.Size = new Vector2(
             _otherPlayersScroll.Size.X,
             Math.Min(maximumHeight, contentHeight)
@@ -938,6 +964,11 @@ public partial class GameHud : CanvasLayer
         EmitSignal(SignalName.EquipmentRequested);
     }
 
+    private void OnPartnersPressed()
+    {
+        EmitSignal(SignalName.PartnersRequested);
+    }
+
     private void OnActionMenuPressed()
     {
         _actionMenuPanel.Visible = !_actionMenuPanel.Visible;
@@ -972,6 +1003,13 @@ public partial class GameHud : CanvasLayer
     {
         CloseActionMenu();
         EmitSignal(SignalName.QuestSubmissionRequested);
+    }
+
+    private void OnPartnerRecruitPressed()
+    {
+        if (_partnerRecruitButton.Disabled) return;
+        CloseActionMenu();
+        EmitSignal(SignalName.PartnerRecruitRequested);
     }
 
     private void BindAttributeLabels(Dictionary<string, Label> target, string gridPath)

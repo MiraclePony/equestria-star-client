@@ -105,6 +105,9 @@ public partial class RunQuestSystemTests : SceneTree
             return;
         }
 
+        // 纸艺 HUD 初次绑定也可能异步发起一次只读背包预览；奖励领取断言
+        // 只要求每次领取相对当时基线至少追加一次权威 GET /items。
+        var itemsRequestBaseline = transport.ItemsRequestCount;
         var submitButton = firstCard.GetNode<Button>("Margin/Content/Actions/SubmitButton");
         AssertFalse(submitButton.Disabled, "submission.canSubmit=true 时提交按钮应可用");
         var actionBefore = transport.ActionCount;
@@ -129,7 +132,8 @@ public partial class RunQuestSystemTests : SceneTree
         AssertPayload(transport.LastAction, "rewardId", 71, "领取必须携带当前队首 rewardId");
         AssertPayload(transport.LastAction, "cardId", 901, "领取必须携带候选 cardId，不能用 itemId 代替");
         AssertEqual(transport.LastAction?.Payload.Count, 2, "领取 payload 只能包含 rewardId/cardId");
-        AssertEqual(transport.ItemsRequestCount, 1, "领取成功后必须重新 GET /items");
+        AssertTrue(transport.ItemsRequestCount >= itemsRequestBaseline + 1, "领取成功后必须重新 GET /items");
+        var itemsRequestsAfterFirstReward = transport.ItemsRequestCount;
         AssertTrue(screen.QuestInventorySnapshot?.Items?.Any(item => item.PlayerItemId == 8801 && item.ItemId == 1003) == true,
             "领取后的真实 playerItemId 必须来自 GET /items，不能使用 cardId");
 
@@ -139,7 +143,7 @@ public partial class RunQuestSystemTests : SceneTree
         await WaitUntilAsync(() => screen.QuestJournal.State == QuestJournalState.Tasks);
         AssertPayload(transport.LastAction, "rewardId", 72, "连续 FIFO 必须使用新鲜队首 rewardId");
         AssertPayload(transport.LastAction, "cardId", 902, "连续 FIFO 必须使用新鲜候选 cardId");
-        AssertEqual(transport.ItemsRequestCount, 2, "每次领取成功都必须重新 GET /items");
+        AssertTrue(transport.ItemsRequestCount >= itemsRequestsAfterFirstReward + 1, "每次领取成功都必须重新 GET /items");
         AssertTrue(screen.QuestInventorySnapshot?.Items?.Any(item => item.PlayerItemId == 8802 && item.ItemId == 1017) == true,
             "第二个同流程奖励也必须采用背包接口返回的真实实例 ID");
 
@@ -147,14 +151,22 @@ public partial class RunQuestSystemTests : SceneTree
             .GetChild<QuestTaskCard>(0);
         var abandonButton = remainingCard.GetNode<Button>("Margin/Content/Actions/AbandonButton");
         AssertFalse(abandonButton.Disabled, "声望大于等于1时放弃按钮应亮起");
-        abandonButton.EmitSignal(Button.SignalName.Pressed);
+        await DispatchViewportClickAsync(abandonButton);
         await ToSignal(this, SignalName.ProcessFrame);
         var confirmYes = screen.QuestJournal.GetNode<Button>("Root/ConfirmLayer/Center/Panel/Margin/Content/Actions/YesButton");
+        var confirmNo = screen.QuestJournal.GetNode<Button>("Root/ConfirmLayer/Center/Panel/Margin/Content/Actions/NoButton");
         AssertTrue(screen.QuestJournal.GetNode<Control>("Root/ConfirmLayer").Visible, "放弃任务必须先显示二次确认");
+        var beforeCancel = transport.ActionCount;
+        await DispatchFocusedAcceptAsync(confirmNo);
+        AssertEqual(transport.ActionCount, beforeCancel, "取消放弃任务不得发送写请求");
+        await DispatchViewportClickAsync(abandonButton);
         await ToSignal(this, SignalName.ProcessFrame);
         await ToSignal(this, SignalName.ProcessFrame);
         // Dummy 渲染器下隐藏容器的全局坐标恒为零，使用 Viewport 焦点键事件验证确认链路。
         // 任务卡的提交按钮仍通过 Viewport 真实鼠标按下/释放验证。
+        transport.DropNextAbandonResponseAfterExecution = true;
+        var abandonHistoryStart = transport.ActionRequestBodies.Count;
+        var abandonExecutions = transport.AbandonExecutionCount;
         await DispatchFocusedAcceptAsync(confirmYes);
         await WaitUntilAsync(
             () => screen.QuestJournal.State == QuestJournalState.Tasks && screen.QuestJournal.DisplayedTaskCount == 0,
@@ -163,6 +175,11 @@ public partial class RunQuestSystemTests : SceneTree
         AssertEqual(transport.LastAction?.ActionType, "ABANDON_QUEST", "确认后才可提交 ABANDON_QUEST");
         AssertPayload(transport.LastAction, "questId", 14, "放弃必须携带 questId");
         AssertPayload(transport.LastAction, "playerQuestId", 402, "放弃必须携带 playerQuestId");
+        AssertEqual(transport.ActionCount, beforeCancel + 2, "放弃任务回执丢失后应自动原样恢复一次");
+        AssertEqual(transport.AbandonExecutionCount, abandonExecutions + 1, "幂等恢复不得重复放弃任务");
+        AssertEqual(transport.ActionRequestBodies.Count, abandonHistoryStart + 2, "放弃恢复应记录两次请求");
+        AssertEqual(transport.ActionRequestBodies[^1], transport.ActionRequestBodies[^2],
+            "放弃恢复须复用原 requestId、stateVersion 和完整 payload");
 
         // 配置身份冲突必须显示异常并刷新权威视图，不能退回 cardId/itemId 兜底。
         transport.RestoreInvalidReward();
@@ -186,13 +203,19 @@ public partial class RunQuestSystemTests : SceneTree
         AssertTrue(fullRewardName.Contains("药剂"), "满包候选仍须显示 configuration.item_name");
         AssertTrue(fullRewardButton.Disabled, "候选 canExecute=false 时领取必须禁用");
         AssertFalse(abandonRewardButton.Disabled, "候选领取禁用不能连带禁用服务端允许的放弃奖励");
+        var inventoryButton = screen.QuestJournal.GetNode<Button>("Root/Center/Panel/Margin/Content/Settlement/RewardActions/InventoryButton");
+        screen.QuestJournal.SetBusy(true, "模拟写操作处理中……");
+        AssertTrue(abandonRewardButton.Disabled && inventoryButton.Disabled, "忙碌期间必须锁定奖励写入和只读入口");
+        screen.QuestJournal.SetBusy(false, "");
+        AssertFalse(abandonRewardButton.Disabled, "解除忙碌后必须恢复服务端允许的放弃资格");
+        AssertFalse(inventoryButton.Disabled, "解除忙碌后必须恢复始终允许的只读背包入口");
+        AssertTrue(fullRewardButton.Disabled, "解除忙碌不得错误启用候选级禁止的领取按钮");
         var beforeDisabledClick = transport.ActionCount;
         await DispatchViewportClickAsync(fullRewardButton);
         AssertEqual(transport.ActionCount, beforeDisabledClick, "灰色领取按钮不得提交行动");
         AssertEqual(screen.QuestJournal.State, QuestJournalState.Reward, "灰色领取按钮点击后应保留奖励弹层");
         await screen.ResolveRewardAsync(73, 131);
         AssertEqual(transport.ActionCount, beforeDisabledClick, "提交入口也必须复用候选资格，不能绕过灰色按钮");
-        var inventoryButton = screen.QuestJournal.GetNode<Button>("Root/Center/Panel/Margin/Content/Settlement/RewardActions/InventoryButton");
         inventoryButton.EmitSignal(Button.SignalName.Pressed);
         await ToSignal(this, SignalName.ProcessFrame);
         await WaitUntilAsync(() => screen.QuestJournal.State == QuestJournalState.Inventory);
@@ -558,8 +581,12 @@ public partial class RunQuestSystemTests : SceneTree
         public int PlayerViewRequestCount { get; private set; }
         public GameActionRequestDto? LastAction { get; private set; }
         public bool FailNextActionWithTimeout { get; set; }
+        public bool DropNextAbandonResponseAfterExecution { get; set; }
+        public int AbandonExecutionCount { get; private set; }
+        public List<string> ActionRequestBodies { get; } = [];
         public bool FailNextQuestReadWithTypeMismatch { get; set; }
         private int _claimedItemCount;
+        private readonly Dictionary<string, GameActionResponseDto> _idempotentAbandonResponses = [];
 
         public QuestSystemTransport()
         {
@@ -681,12 +708,32 @@ public partial class RunQuestSystemTests : SceneTree
             {
                 ActionCount++;
                 LastAction = action;
+                ActionRequestBodies.Add(JsonSerializer.Serialize(action));
+                if (!string.IsNullOrWhiteSpace(action.RequestId)
+                    && _idempotentAbandonResponses.TryGetValue(action.RequestId, out var replay))
+                {
+                    return Return<T, GameActionResponseDto>(ApiResult<GameActionResponseDto>.Success(replay, "success", 200));
+                }
                 if (FailNextActionWithTimeout)
                 {
                     FailNextActionWithTimeout = false;
                     return Return<T, GameActionResponseDto>(ApiResult<GameActionResponseDto>.Failure("模拟超时", "REQUEST_TIMEOUT"));
                 }
-                return Return<T, GameActionResponseDto>(HandleAction(action));
+                var handled = HandleAction(action);
+                if (DropNextAbandonResponseAfterExecution
+                    && string.Equals(action.ActionType, "ABANDON_QUEST", StringComparison.OrdinalIgnoreCase)
+                    && handled.Ok && handled.Data != null)
+                {
+                    DropNextAbandonResponseAfterExecution = false;
+                    if (!string.IsNullOrWhiteSpace(action.RequestId))
+                    {
+                        _idempotentAbandonResponses[action.RequestId] = handled.Data;
+                    }
+                    return Return<T, GameActionResponseDto>(ApiResult<GameActionResponseDto>.Failure(
+                        "模拟服务端已放弃任务但首次回执丢失",
+                        "EMPTY_RESPONSE"));
+                }
+                return Return<T, GameActionResponseDto>(handled);
             }
             return Task.FromResult(ApiResult<T>.Failure($"未处理测试请求：{method} {path}", "UNEXPECTED_REQUEST"));
         }
@@ -760,6 +807,7 @@ public partial class RunQuestSystemTests : SceneTree
                     response.DeckDraws = [new DeckDrawDto { RequestedCount = 1, ActualCount = 1, Shortage = false }];
                     break;
                 case "ABANDON_QUEST":
+                    AbandonExecutionCount++;
                     var abandonedId = action.Payload["playerQuestId"]!.GetValue<long>();
                     Quests.Quests!.RemoveAll(quest => quest.PlayerQuestId == abandonedId);
                     break;

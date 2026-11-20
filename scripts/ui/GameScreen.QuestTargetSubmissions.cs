@@ -456,6 +456,7 @@ public partial class GameScreen
         && !_questSystemSubmitting
         && !_itemSystemSubmitting
         && !_questAcceptSubmitting
+        && !_partnerSubmitting
         && !_endTurnSubmitting
         && !_workPreparing
         && !_questCheckPreparing

@@ -77,7 +77,7 @@ public static class ItemSystemModel
             || stateVersion < 0
             || playerItemId <= 0
             || string.IsNullOrWhiteSpace(requestId)
-            || normalized is not ("USE_ITEM" or "EQUIP_ITEM" or "UNEQUIP_ITEM"))
+            || normalized is not ("USE_ITEM" or "EQUIP_ITEM" or "UNEQUIP_ITEM" or "SHOP_SELL_ITEM"))
         {
             throw new ArgumentException("道具请求缺少有效身份、版本、实例、行动类型或 requestId。");
         }

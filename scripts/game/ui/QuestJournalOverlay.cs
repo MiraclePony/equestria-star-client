@@ -31,6 +31,7 @@ public partial class QuestJournalOverlay : CanvasLayer
     [Signal] public delegate void RewardResolveRequestedEventHandler(long rewardId, long cardId);
     [Signal] public delegate void RewardAbandonRequestedEventHandler(long rewardId);
     [Signal] public delegate void InventoryRequestedEventHandler();
+    [Signal] public delegate void InventoryBackRequestedEventHandler();
     [Signal] public delegate void DiscardRequestedEventHandler(long playerItemId);
     [Signal] public delegate void RewardDataInvalidEventHandler();
 
@@ -72,6 +73,7 @@ public partial class QuestJournalOverlay : CanvasLayer
     private long _lastRewardPlayerId;
     private bool _keepSettlementSummary;
     private bool _busy;
+    private bool _closeAuthorityDisabled;
 
     public QuestJournalState State { get; private set; } = QuestJournalState.Closed;
     public bool IsOpen => State != QuestJournalState.Closed;
@@ -128,7 +130,7 @@ public partial class QuestJournalOverlay : CanvasLayer
         _title.Text = kind == QuestJournalRetryKind.Inventory ? "整理背包" : "个人任务";
         _status.Text = text;
         ShowOnly(_loading);
-        _closeButton.Disabled = false;
+        SetCloseAuthority(false);
     }
 
     public void ShowTasks(IReadOnlyList<QuestTaskDisplay> tasks, string status = "")
@@ -163,10 +165,10 @@ public partial class QuestJournalOverlay : CanvasLayer
         _title.Text = "个人任务";
         _status.Text = status;
         ShowOnly(_taskScroll);
-        _closeButton.Disabled = false;
+        SetCloseAuthority(false);
     }
 
-    public void ShowError(string message, QuestJournalRetryKind kind)
+    public void ShowError(string message, QuestJournalRetryKind kind, string retryText = "重试")
     {
         _retryKind = kind;
         _root.Visible = true;
@@ -174,8 +176,9 @@ public partial class QuestJournalOverlay : CanvasLayer
         _title.Text = kind == QuestJournalRetryKind.Inventory ? "整理背包" : "个人任务";
         _status.Text = "";
         _errorLabel.Text = message;
+        _retryButton.Text = retryText;
         ShowOnly(_error);
-        _closeButton.Disabled = false;
+        SetCloseAuthority(false);
     }
 
     public void ShowSettlement(
@@ -197,7 +200,7 @@ public partial class QuestJournalOverlay : CanvasLayer
         ClearChildren(_rewardList);
         _rewardScroll.Visible = false;
         _rewardActions.Visible = false;
-        _closeButton.Disabled = false;
+        SetCloseAuthority(false);
 
         if (QuestSystemModel.IsOwnPendingReward(pendingReward, currentPlayerId))
         {
@@ -225,7 +228,7 @@ public partial class QuestJournalOverlay : CanvasLayer
         _rewardScroll.Visible = true;
         _rewardActions.Visible = true;
         var isOwnReward = QuestSystemModel.IsOwnPendingReward(reward, currentPlayerId);
-        _closeButton.Disabled = isOwnReward;
+        SetCloseAuthority(isOwnReward);
 
         if (!isOwnReward)
         {
@@ -293,11 +296,11 @@ public partial class QuestJournalOverlay : CanvasLayer
             var button = new Button
             {
                 Text = "领取",
-                Disabled = !display.CanExecute,
                 TooltipText = display.CanExecute
                     ? "领取该候选"
                     : display.ExecuteReason
             };
+            SetButtonAuthority(button, !display.CanExecute);
             var rewardId = display.RewardId;
             var cardId = display.CardId;
             button.Pressed += () => EmitSignal(SignalName.RewardResolveRequested, rewardId, cardId);
@@ -348,10 +351,10 @@ public partial class QuestJournalOverlay : CanvasLayer
             var discard = new Button
             {
                 Text = "丢弃",
-                Disabled = !discardAvailable,
                 TooltipText = discardAvailable ? "丢弃该持有实例" : reason,
                 CustomMinimumSize = new Vector2(110, 42)
             };
+            SetButtonAuthority(discard, !discardAvailable);
             var playerItemId = item.PlayerItemId ?? 0;
             discard.Pressed += () => AskConfirm(
                 ConfirmKind.DiscardItem,
@@ -372,34 +375,31 @@ public partial class QuestJournalOverlay : CanvasLayer
         _title.Text = "整理背包";
         _status.Text = reason;
         ShowOnly(_inventoryScroll);
-        _closeButton.Disabled = false;
+        SetCloseAuthority(false);
     }
 
     public void SetBusy(bool busy, string message)
     {
         _busy = busy;
         _status.Text = message;
-        _closeButton.Disabled = busy && State == QuestJournalState.Reward;
+        _closeButton.Disabled = busy || _closeAuthorityDisabled;
         foreach (var card in _taskCards)
         {
             card.SetBusy(busy);
         }
-        if (busy)
-        {
-            SetButtonsDisabledRecursive(_settlement, true);
-            SetButtonsDisabledRecursive(_inventoryScroll, true);
-        }
+        ApplyBusyStateRecursive(_settlement, busy);
+        ApplyBusyStateRecursive(_inventoryScroll, busy);
     }
 
     public void CloseOverlay()
     {
-        if (State == QuestJournalState.Inventory && _lastReward != null)
-        {
-            ShowReward(_lastReward, _lastRewardPlayerId, _keepSettlementSummary);
-            return;
-        }
         if (!IsOpen || (State == QuestJournalState.Reward && _closeButton.Disabled) || _confirmLayer.Visible)
         {
+            return;
+        }
+        if (State == QuestJournalState.Inventory)
+        {
+            EmitSignal(SignalName.InventoryBackRequested);
             return;
         }
         ClearTaskCards();
@@ -455,11 +455,13 @@ public partial class QuestJournalOverlay : CanvasLayer
     private void SetRewardActions(PendingRewardDto reward, bool allowInventory)
     {
         _rewardAbandonButton.SetMeta("reward_id", reward.RewardId ?? 0);
-        _rewardAbandonButton.Disabled = reward.CanAbandon != true;
+        SetButtonAuthority(_rewardAbandonButton, reward.CanAbandon != true);
         _rewardAbandonButton.TooltipText = reward.CanAbandon == true
             ? "放弃当前奖励"
             : QuestSystemModel.RewardAbandonReason(reward);
-        _inventoryButton.Visible = allowInventory && reward.CapacitySatisfied == false;
+        // 背包查看是只读能力，不受容量、丢弃资格或当前回合限制。
+        _inventoryButton.Visible = allowInventory;
+        SetButtonAuthority(_inventoryButton, false);
     }
 
     private void AskConfirm(ConfirmKind kind, long primaryId, long secondaryId, string message)
@@ -573,16 +575,34 @@ public partial class QuestJournalOverlay : CanvasLayer
         }
     }
 
-    private static void SetButtonsDisabledRecursive(Node node, bool disabled)
+    private void SetButtonAuthority(Button button, bool authorityDisabled)
+    {
+        button.SetMeta("authority_disabled", authorityDisabled);
+        button.Disabled = _busy || authorityDisabled;
+    }
+
+    private static void ApplyBusyStateRecursive(Node node, bool busy)
     {
         foreach (var child in node.GetChildren())
         {
             if (child is Button button)
             {
-                button.Disabled = disabled;
+                if (!button.HasMeta("authority_disabled"))
+                {
+                    // 首次进入忙碌态前记录服务端资格，解除忙碌时按资格恢复，而不是全量启用。
+                    button.SetMeta("authority_disabled", button.Disabled);
+                }
+                var authorityDisabled = button.GetMeta("authority_disabled", button.Disabled).AsBool();
+                button.Disabled = busy || authorityDisabled;
             }
-            SetButtonsDisabledRecursive(child, disabled);
+            ApplyBusyStateRecursive(child, busy);
         }
+    }
+
+    private void SetCloseAuthority(bool disabled)
+    {
+        _closeAuthorityDisabled = disabled;
+        _closeButton.Disabled = _busy || disabled;
     }
 
     private static void AddMessage(Node parent, string text, float width)

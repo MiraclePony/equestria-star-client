@@ -17,7 +17,16 @@ public partial class GameScreen
     private bool _questJournalRequestInProgress;
     private Task _questSystemTask = Task.CompletedTask;
     private PlayerQuestListResponseDto? _questJournalSnapshot;
-    private PlayerItemsResponseDto? _inventorySnapshot;
+    private PlayerItemsResponseDto? _inventorySnapshotValue;
+    private PlayerItemsResponseDto? _inventorySnapshot
+    {
+        get => _inventorySnapshotValue;
+        set
+        {
+            _inventorySnapshotValue = value;
+            OnPaperInventorySnapshotChanged(value);
+        }
+    }
     private GameActionRequestDto? _unresolvedQuestAction;
     private long _rewardValidationRefreshStateVersion = -1;
 
@@ -35,6 +44,7 @@ public partial class GameScreen
         _questJournal.RewardResolveRequested += OnRewardResolveRequested;
         _questJournal.RewardAbandonRequested += OnRewardAbandonRequested;
         _questJournal.InventoryRequested += OnInventoryRequested;
+        _questJournal.InventoryBackRequested += OnInventoryBackRequested;
         _questJournal.DiscardRequested += OnDiscardRequested;
         _questJournal.RewardDataInvalid += OnRewardDataInvalid;
     }
@@ -52,6 +62,7 @@ public partial class GameScreen
         _questJournal.RewardResolveRequested -= OnRewardResolveRequested;
         _questJournal.RewardAbandonRequested -= OnRewardAbandonRequested;
         _questJournal.InventoryRequested -= OnInventoryRequested;
+        _questJournal.InventoryBackRequested -= OnInventoryBackRequested;
         _questJournal.DiscardRequested -= OnDiscardRequested;
         _questJournal.RewardDataInvalid -= OnRewardDataInvalid;
     }
@@ -77,6 +88,16 @@ public partial class GameScreen
         if (!TryGetCurrentPlayer(out var player))
         {
             _questJournal.ShowError("玩家视图中缺少有效的局内 playerId，无法读取个人任务。", QuestJournalRetryKind.Tasks);
+            return Task.CompletedTask;
+        }
+
+        if (_unresolvedQuestAction is { } unresolved
+            && string.Equals(unresolved.ActionType, "ABANDON_QUEST", StringComparison.OrdinalIgnoreCase))
+        {
+            _questJournal.ShowError(
+                "上次放弃任务自动恢复后结果仍未知，可继续用同一次请求确认结果。",
+                QuestJournalRetryKind.Tasks,
+                "恢复原操作");
             return Task.CompletedTask;
         }
 
@@ -209,7 +230,7 @@ public partial class GameScreen
                 ["playerQuestId"] = playerQuestId
             }
         };
-        return StartQuestWrite(request, QuestWriteKind.AbandonQuest);
+        return StartQuestWrite(request, QuestWriteKind.AbandonQuest, true);
     }
 
     public Task ResolveRewardAsync(long rewardId, long cardId)
@@ -293,7 +314,7 @@ public partial class GameScreen
 
     public Task OpenQuestInventoryAsync()
     {
-        if (!_active || _questSystemSubmitting || !TryGetCurrentPlayer(out var player))
+        if (!_active || _questSystemSubmitting || IsWorkOverlayBlocking || !TryGetCurrentPlayer(out var player))
         {
             return _questSystemTask;
         }
@@ -335,27 +356,35 @@ public partial class GameScreen
         _questJournal.ShowInventory(result.Data, available, reason);
     }
 
-    private Task StartQuestWrite(GameActionRequestDto request, QuestWriteKind kind)
+    private Task StartQuestWrite(
+        GameActionRequestDto request,
+        QuestWriteKind kind,
+        bool allowAutomaticRetry = false,
+        bool preserveUnresolved = false)
     {
         _questSystemSubmitting = true;
-        _unresolvedQuestAction = null;
+        if (!preserveUnresolved) _unresolvedQuestAction = null;
         ExitMoveMode();
         _hud.SetActionControlsLocked(true);
         _questJournal.SetBusy(true, "正在提交操作……");
-        _questSystemTask = SubmitQuestWriteAsync(_gameId, request, kind, _generation);
+        _questSystemTask = SubmitQuestWriteAsync(_gameId, request, kind, _generation, allowAutomaticRetry);
         return _questSystemTask;
     }
 
-    private async Task SubmitQuestWriteAsync(long gameId, GameActionRequestDto request, QuestWriteKind kind, int generation)
+    private async Task SubmitQuestWriteAsync(
+        long gameId,
+        GameActionRequestDto request,
+        QuestWriteKind kind,
+        int generation,
+        bool allowAutomaticRetry)
     {
-        ApiResult<GameActionResponseDto> result;
-        try
+        var result = await SendQuestActionOnceAsync(gameId, request);
+        if (kind == QuestWriteKind.AbandonQuest
+            && allowAutomaticRetry
+            && IsUnknownQuestActionResult(result)
+            && await WaitForIdempotentReplayAsync(generation))
         {
-            result = await ApiClient.SubmitGameActionAsync(gameId, request);
-        }
-        catch (Exception exception)
-        {
-            result = ApiResult<GameActionResponseDto>.Failure($"任务操作请求异常：{exception.Message}", "QUEST_ACTION_REQUEST_EXCEPTION");
+            result = await SendQuestActionOnceAsync(gameId, request);
         }
 
         if (!IsResponseCurrent(generation))
@@ -366,10 +395,14 @@ public partial class GameScreen
         {
             if (!result.Ok || result.Data == null)
             {
-                if (result.ErrorCode is "REQUEST_TIMEOUT" or "NETWORK_ERROR" or "QUEST_ACTION_REQUEST_EXCEPTION")
+                if (IsUnknownQuestActionResult(result))
                 {
-                    // 未知结果保留原 requestId、路径和完整请求体，且不自动重发。
+                    // 自动恢复后仍未知时保留原 requestId、路径和完整请求体。
                     _unresolvedQuestAction = request;
+                }
+                else if (kind == QuestWriteKind.AbandonQuest)
+                {
+                    _unresolvedQuestAction = null;
                 }
                 await RecoverAfterQuestActionFailureAsync(result, kind);
                 return;
@@ -433,6 +466,25 @@ public partial class GameScreen
         }
     }
 
+    private async Task<ApiResult<GameActionResponseDto>> SendQuestActionOnceAsync(
+        long gameId,
+        GameActionRequestDto request)
+    {
+        try
+        {
+            return await ApiClient.SubmitGameActionAsync(gameId, request);
+        }
+        catch (Exception exception)
+        {
+            return ApiResult<GameActionResponseDto>.Failure(
+                $"任务操作请求异常：{exception.Message}",
+                "QUEST_ACTION_REQUEST_EXCEPTION");
+        }
+    }
+
+    private static bool IsUnknownQuestActionResult(ApiResult<GameActionResponseDto> result) =>
+        IsRecoverableUnknownResult(result, "QUEST_ACTION_REQUEST_EXCEPTION");
+
     private async Task HandleQuestSettlementAsync(GameActionResponseDto response, long playerId, int generation)
     {
         var settlement = response.QuestSettlement;
@@ -463,10 +515,10 @@ public partial class GameScreen
         var next = _latestPlayerView?.EngineState?.PendingReward;
         if (next != null)
         {
-            _questJournal.ShowReward(next, playerId);
+            RouteAuthoritativeReward(next, playerId, inventoryRefreshError == null ? null : $"上一份奖励已确认，但背包刷新失败：{inventoryRefreshError}");
             if (!string.IsNullOrWhiteSpace(inventoryRefreshError))
             {
-                _questJournal.SetStatusMessage($"上一份奖励已确认，但背包刷新失败：{inventoryRefreshError}");
+                SetActiveRewardStatus($"上一份奖励已确认，但背包刷新失败：{inventoryRefreshError}");
             }
             return;
         }
@@ -551,11 +603,16 @@ public partial class GameScreen
         InvalidateAvailableActions();
         await RefreshPlayerViewAsync();
         await RefreshAvailableActionsAsync(true);
-        var prefix = result.ErrorCode is "REQUEST_TIMEOUT" or "NETWORK_ERROR" or "QUEST_ACTION_REQUEST_EXCEPTION"
-            ? "操作结果未知，已保留原请求身份且不会自动重发。"
+        var unknown = IsUnknownQuestActionResult(result);
+        var prefix = unknown
+            ? kind == QuestWriteKind.AbandonQuest
+                ? "操作结果仍未知，已自动用原请求恢复一次。"
+                : "操作结果未知，已保留原请求身份。"
             : "操作未完成。";
-        _questJournal.ShowError($"{prefix}{FirstNonEmpty(result.Message, null, "请刷新后重试。")}",
-            kind == QuestWriteKind.DiscardItem ? QuestJournalRetryKind.Inventory : QuestJournalRetryKind.Tasks);
+        _questJournal.ShowError(
+            $"{prefix}{FirstNonEmpty(result.Message, null, "请刷新后重试。")}",
+            kind == QuestWriteKind.DiscardItem ? QuestJournalRetryKind.Inventory : QuestJournalRetryKind.Tasks,
+            unknown && kind == QuestWriteKind.AbandonQuest ? "恢复原操作" : "重试");
     }
 
     private bool TryBeginQuestWrite(
@@ -600,9 +657,12 @@ public partial class GameScreen
     private bool CanStartQuestWrite() =>
         _active
         && IsGameConnectionReady
+        && (_unresolvedQuestAction == null
+            || !string.Equals(_unresolvedQuestAction.ActionType, "ABANDON_QUEST", StringComparison.OrdinalIgnoreCase))
         && !_questSystemSubmitting
         && !_itemSystemSubmitting
         && !_questAcceptSubmitting
+        && !_partnerSubmitting
         && !_endTurnSubmitting
         && !IsWorkActionInProgress
         && _moveState != PlayerMoveState.SubmittingMove
@@ -618,14 +678,6 @@ public partial class GameScreen
     {
         if (!GodotObject.IsInstanceValid(_questJournal) || !_questJournal.IsOpen)
         {
-            return;
-        }
-
-        if (_questJournal.State == QuestJournalState.Reward
-            && TryGetCurrentPlayer(out var currentPlayer)
-            && playerView.EngineState?.PendingReward is { } reward)
-        {
-            _questJournal.ShowReward(reward, currentPlayer.PlayerId);
             return;
         }
 
@@ -648,6 +700,13 @@ public partial class GameScreen
 
     private void OnQuestJournalRetryRequested(int kind)
     {
+        if ((QuestJournalRetryKind)kind == QuestJournalRetryKind.Tasks
+            && _unresolvedQuestAction is { } unresolved
+            && string.Equals(unresolved.ActionType, "ABANDON_QUEST", StringComparison.OrdinalIgnoreCase))
+        {
+            _ = RetryUnresolvedQuestActionAsync(unresolved);
+            return;
+        }
         if ((QuestJournalRetryKind)kind == QuestJournalRetryKind.Inventory)
         {
             _ = OpenQuestInventoryAsync();
@@ -658,12 +717,52 @@ public partial class GameScreen
         }
     }
 
+    private Task RetryUnresolvedQuestActionAsync(GameActionRequestDto request)
+    {
+        if (!_active
+            || !IsGameConnectionReady
+            || _questSystemSubmitting
+            || _itemSystemSubmitting
+            || _questAcceptSubmitting
+            || _endTurnSubmitting
+            || IsWorkActionInProgress
+            || _moveState == PlayerMoveState.SubmittingMove
+            || !TryGetCurrentPlayer(out var player)
+            || player.PlayerId != request.PlayerId)
+        {
+            return _questSystemTask;
+        }
+
+        _questJournal.OpenLoading(QuestJournalRetryKind.Tasks, "正在恢复上次放弃任务操作……");
+        return StartQuestWrite(request, QuestWriteKind.AbandonQuest, false, true);
+    }
+
     private void OnQuestSubmitRequested(long playerQuestId) => _ = SubmitQuestAsync(playerQuestId);
     private void OnQuestAbandonRequested(long playerQuestId, long questId) => _ = AbandonQuestAsync(playerQuestId, questId);
     private void OnRewardResolveRequested(long rewardId, long cardId) => _ = ResolveRewardAsync(rewardId, cardId);
     private void OnRewardAbandonRequested(long rewardId) => _ = AbandonRewardAsync(rewardId);
     private void OnInventoryRequested() => _ = OpenQuestInventoryAsync();
+    private void OnInventoryBackRequested() => _ = ReturnFromQuestInventoryAsync();
     private void OnDiscardRequested(long playerItemId) => _ = DiscardItemAsync(playerItemId);
+
+    private async Task ReturnFromQuestInventoryAsync()
+    {
+        if (!_active || _questSystemSubmitting || IsWorkOverlayBlocking || !TryGetCurrentPlayer(out var player)) return;
+        var generation = _generation;
+        _questJournal.OpenLoading(QuestJournalRetryKind.Inventory, "正在同步当前奖励队首……");
+        await RefreshPlayerViewAsync();
+        if (!IsResponseCurrent(generation) || !TryGetCurrentPlayer(out player)) return;
+
+        var reward = _latestPlayerView?.EngineState?.PendingReward;
+        if (reward != null)
+        {
+            RouteAuthoritativeReward(reward, player.PlayerId);
+            return;
+        }
+
+        _questJournal.ForceClose();
+        await OpenQuestJournalAsync();
+    }
 
     private void OnRewardDataInvalid()
     {

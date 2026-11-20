@@ -319,6 +319,24 @@ public partial class ApiClient : Node
         );
     }
 
+    /// <summary>本局自己的伙伴，只用于纸艺 HUD 的只读队伍预览。</summary>
+    public Task<ApiResult<PlayerPartnerListResponseDto>> GetPlayerPartnersAsync(long gameId, long playerId)
+    {
+        return GetJsonAsync<PlayerPartnerListResponseDto>(
+            $"/games/{gameId}/partners",
+            new Dictionary<string, string?> { ["playerId"] = playerId.ToString() }
+        );
+    }
+
+    /// <summary>读取本局行动历史；不触发任何业务写操作。</summary>
+    public Task<ApiResult<List<ActionLogDto>>> GetActionLogsAsync(long gameId, int limit = 20)
+    {
+        return GetJsonAsync<List<ActionLogDto>>(
+            $"/games/{gameId}/action-logs",
+            new Dictionary<string, string?> { ["limit"] = limit.ToString() }
+        );
+    }
+
     public Task<ApiResult<CurrentShopResponseDto>> GetCurrentShopAsync(long gameId, long playerId)
     {
         return GetJsonAsync<CurrentShopResponseDto>(

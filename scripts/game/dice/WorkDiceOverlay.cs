@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Godot;
 using EquestriaStar.Api;
 
@@ -347,6 +348,26 @@ public partial class WorkDiceOverlay : CanvasLayer
             $"任务判定{(success ? "成功" : "失败")}\n{diceLine}{message}\n" +
             "任务目标将以重新查询的完整任务列表为准；判定成功不等于任务已提交或奖励已入账。\n\n" +
             "点击任意位置返回判定列表。";
+        EnterResultState();
+    }
+
+    public void ShowPartnerRecruitResult(CheckRollResponseDto response)
+    {
+        var success = response.CheckResult?.Success == true;
+        var submitted = response.SubmittedDice!.Value;
+        var effective = response.EffectiveDice!.Value;
+        var diceLine = submitted == effective
+            ? $"最终点数：{effective}"
+            : $"提交点数：{submitted}　服务端有效点数：{effective}";
+        var draw = response.DeckDraws?.FirstOrDefault(value =>
+            string.Equals(value.DeckType, "PARTNER", StringComparison.OrdinalIgnoreCase));
+        var drawLine = draw == null
+            ? "伙伴候选以最新 FIFO 队首为准。"
+            : $"实际抽取：{draw.ActualCount ?? 0}/{draw.RequestedCount ?? 0} 张"
+              + (draw.Shortage == true ? "（牌堆不足，未补牌）" : "");
+        _resultLabel.Text =
+            $"伙伴招募判定{(success ? "成功" : "未成功")}\n{diceLine}\n{drawLine}\n" +
+            "点击任意位置后查看服务端最新伙伴候选。";
         EnterResultState();
     }
 

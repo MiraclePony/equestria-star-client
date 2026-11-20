@@ -86,6 +86,7 @@ public partial class RunGameScreenTests : SceneTree
         VerifyMapInputRoutingMetadata(screen);
         VerifyFairytaleHudLayout(screen);
         VerifyTurnHudStates(screen, transport);
+        await VerifyPartnerSnapshotAndEntryAsync(screen, transport);
 
         // 可视检查模式保留正式组合场景，便于人工验证地图与 HUD。
         if (visualCheck)
@@ -114,6 +115,10 @@ public partial class RunGameScreenTests : SceneTree
         await VerifyEndTurnErrorsAsync(screen, transport);
         await VerifyAllOfflineAndHeartbeatVersionGuardAsync(screen, transport);
         await VerifyFailureAndRetryAsync(screen, transport);
+        await VerifyPartnerWriteRefusalAsync(screen, transport);
+        await VerifyPartnerSelectionAndFifoRoutingAsync(screen, transport);
+        await VerifyRewardInventoryBackRoutingAsync(screen, transport);
+        await VerifyPartnerUnknownResultRecoveryAsync(screen, transport);
         await VerifyFreedScreenIgnoresResponseAsync(screen, transport);
 
         apiClient.ClearTransportForTests();
@@ -217,8 +222,8 @@ public partial class RunGameScreenTests : SceneTree
         AssertEqual(hudRoot.MouseFilter, Control.MouseFilterEnum.Ignore, "HudRoot 透明覆盖必须忽略鼠标命中");
 
         var otherPlayersPanel = screen.Hud.GetNode<Control>("HudRoot/LeftMargin/LeftRail/OtherPlayersPanel");
-        var currentPlayerPanel = screen.Hud.GetNode<Control>("HudRoot/LeftMargin/LeftRail/CurrentPlayerPanel");
-        var inventoryButton = screen.Hud.GetNode<Control>("HudRoot/BottomActionsAnchor/Buttons/ItemsButton");
+        var currentPlayerPanel = screen.Hud.GetNode<Control>("HudRoot/BottomBar/BarContent/CurrentPlayerPanel");
+        var inventoryButton = screen.Hud.GetNode<Control>("HudRoot/BottomBar/BarContent/ItemSection/ItemsButton");
         var actionMenuPanel = screen.Hud.GetNode<Control>("HudRoot/ActionMenuAnchor/ActionMenu/MenuPanel");
         var turnNoticeLabel = screen.Hud.GetNode<Label>(
             "HudRoot/TurnNoticeAnchor/TurnNoticePanel/TurnNoticeLabel"
@@ -226,27 +231,26 @@ public partial class RunGameScreenTests : SceneTree
         var otherPlayersScroll = screen.Hud.GetNode<ScrollContainer>(
             "HudRoot/LeftMargin/LeftRail/OtherPlayersPanel/OtherPlayersScroll");
         var avatarBlocker = screen.Hud.GetNode<Control>(
-            "HudRoot/LeftMargin/LeftRail/CurrentPlayerPanel/AvatarInputBlocker");
-        var statusBlocker = screen.Hud.GetNode<Control>(
-            "HudRoot/LeftMargin/LeftRail/CurrentPlayerPanel/StatusInputBlocker");
+            "HudRoot/BottomBar/BarContent/CurrentPlayerPanel/AvatarPlaceholder");
+        var statusBlocker = screen.Hud.GetNode<Control>("HudRoot/BottomBar/Tray");
         AssertFalse(MapCameraController.IsMapInputBlocked(otherPlayersPanel),
             "其他玩家的大矩形布局父节点不得整体拦截地图输入");
         AssertTrue(otherPlayersScroll.IsInGroup(MapCameraController.MapInputBlockerGroup),
             "实际可滚动的玩家列表区必须拦截地图输入");
-        AssertTrue(otherPlayersScroll.Size.Y <= 77.0f + 0.5f,
-            "单个其他玩家时滚动拦截区不得延伸到未填满空白");
+        AssertTrue(otherPlayersScroll.Size.Y <= OtherPlayerHudEntry.CurrentHeight + OtherPlayerHudEntry.NormalHeight + 22.0f + 0.5f,
+            "两名玩家时滚动拦截区不得延伸到未填满空白");
         AssertFalse(MapCameraController.IsMapInputBlocked(currentPlayerPanel),
             "当前玩家的大矩形布局父节点不得整体拦截地图输入");
         AssertTrue(avatarBlocker.IsInGroup(MapCameraController.MapInputBlockerGroup),
             "当前玩家头像的实际可见区必须拦截地图输入");
         AssertTrue(statusBlocker.IsInGroup(MapCameraController.MapInputBlockerGroup),
-            "当前玩家状态条的实际可见区必须拦截地图输入");
+            "底栏纸托盘（实体面板）必须拦截地图输入");
         AssertTrue(inventoryButton.IsInGroup(MapCameraController.MapInputBlockerGroup), "右下图标按钮必须标记为地图输入拦截区");
         AssertTrue(actionMenuPanel.IsInGroup(MapCameraController.MapInputBlockerGroup), "行为菜单必须拦截地图输入");
         AssertFalse(MapCameraController.IsMapInputBlocked(turnNoticeLabel), "顶部回合提示不得阻止地图输入");
         AssertTrue(MapCameraController.IsMapInputBlocked(
-            screen.Hud.GetNode<Button>("HudRoot/ActionMenuAnchor/ActionMenu/MenuPanel/MenuMargin/Menu/EndTurnSlot/EndTurnButton")
-        ), "结束回合按钮必须通过父节点标记阻止地图输入");
+            screen.Hud.GetNode<Button>("HudRoot/BottomBar/BarContent/ActionCluster/EndTurnSlot/EndTurnButton")
+        ), "结束回合按钮必须阻止地图输入");
         AssertFalse(MapCameraController.IsMapInputBlocked(hudRoot), "HUD 透明根节点不得拦截地图输入");
 
         var playerEntry = screen.Hud
@@ -266,7 +270,7 @@ public partial class RunGameScreenTests : SceneTree
 
     private void VerifyFairytaleHudLayout(GameScreen screen)
     {
-        var iconButtons = new[]
+        var entryButtons = new[]
         {
             screen.Hud.QuestBoardButton,
             screen.Hud.ShopShelfButton,
@@ -274,28 +278,351 @@ public partial class RunGameScreenTests : SceneTree
             screen.Hud.PersonalQuestsButton,
             screen.Hud.EquipmentButton,
             screen.Hud.PartnersButton,
-            screen.Hud.ActionMenuButton
+            screen.Hud.ActionMenuButton,
+            screen.Hud.EndTurnButton,
+            screen.Hud.ChatHandle,
+            screen.Hud.HistoryHandle
         };
-        AssertTrue(iconButtons.All(button => button.Icon != null), "七个童话风入口必须绑定独立图标资源");
-        AssertTrue(iconButtons.All(button => button.IsInGroup(MapCameraController.MapInputBlockerGroup)),
-            "七个实际入口必须全部阻止地图输入");
-        AssertTrue(screen.Hud.PartnersButton.Disabled, "伙伴入口必须保持禁用占位");
+        AssertTrue(new[] { screen.Hud.PersonalQuestsButton, screen.Hud.ActionMenuButton, screen.Hud.EndTurnButton }
+                .All(button => button.Icon != null), "折纸圆章入口必须绑定独立图标资源");
+        AssertTrue(entryButtons.All(button => button.IsInGroup(MapCameraController.MapInputBlockerGroup)),
+            "全部实际入口必须阻止地图输入");
+        AssertFalse(screen.Hud.PartnersButton.Disabled, "伙伴入口必须启用只读队伍查看");
+        AssertTrue(screen.Hud.GetNode("HudRoot/ActionMenuAnchor/ActionMenu/MenuPanel")
+                .IsInGroup(MapCameraController.MapInputBlockerGroup),
+            "招募伙伴所在行为菜单必须阻止地图输入");
         AssertTrue(screen.Hud.GetNode<TextureRect>("HudRoot/TurnNoticeAnchor/TurnNoticePanel/BannerTexture").Texture != null,
             "顶部回合横幅必须使用独立童话风素材");
         AssertTrue(screen.Hud.GetNode<TextureRect>("HudRoot/TopRightAnchor/TopRight/MapIndicator/Texture").Texture != null,
             "右上正式地图标识必须使用独立底板素材");
         AssertFalse(screen.MapScene.GetNode<Control>("CanvasLayer/MapInfoMargin").Visible,
             "GameScreen 组合时必须隐藏地图场景旧标识，避免与童话 HUD 重叠");
-        AssertTrue(screen.Hud.GetNode("HudRoot/ActionMenuAnchor/ActionMenu/MenuPanel").IsAncestorOf(screen.Hud.EndTurnButton),
-            "结束回合必须只保留在行为菜单内");
+        AssertFalse(screen.Hud.GetNode("HudRoot/ActionMenuAnchor/ActionMenu/MenuPanel").IsAncestorOf(screen.Hud.EndTurnButton),
+            "结束回合不得再留在行为菜单内");
+        AssertEqual(screen.Hud.FindChildren("EndTurnButton", "Button", true, false).Count, 1, "结束回合入口必须唯一");
         AssertFalse(screen.Hud.HasNode("HudRoot/EndTurnAnchor"), "旧的独立结束回合入口不得残留");
     }
+
+    private async Task VerifyPartnerSnapshotAndEntryAsync(GameScreen screen, GameScreenTransport transport)
+    {
+        await WaitUntilAsync(() => screen.PartnerSnapshot != null && transport.PartnerRequestCount > 0);
+        AssertEqual(screen.PartnerSnapshot!.StateVersion, transport.View.StateVersion,
+            "伙伴预览必须采用 /partners 响应中的权威 stateVersion");
+        AssertFalse(screen.Hud.PartnerRecruitButton.Disabled,
+            "partnerRecruitmentVersion=1 且 DRAW_PARTNER_OFFER 可用时招募入口必须亮起");
+
+        var lastGood = screen.PartnerSnapshot;
+        transport.FailPartnerSnapshot = true;
+        await screen.OpenPartnersAsync();
+        AssertTrue(ReferenceEquals(screen.PartnerSnapshot, lastGood),
+            "同版本伙伴查询失败不得覆盖最后成功快照或推进成功版本");
+        transport.FailPartnerSnapshot = false;
+        await screen.OpenPartnersAsync();
+        AssertTrue(screen.PartnerOverlay.IsOpen && screen.PartnerOverlay.Mode == PartnerOverlayMode.Team,
+            "失败后重试成功必须恢复队伍页面");
+        screen.PartnerOverlay.CloseOverlay();
+    }
+
+    private async Task VerifyPartnerWriteRefusalAsync(GameScreen screen, GameScreenTransport transport)
+    {
+        transport.View.CurrentTurnUserId = 1;
+        transport.View.EngineState ??= new EngineStateDto();
+        transport.View.EngineState.PartnerRecruitmentVersion = 1;
+        transport.SetPartnerAvailability(true, null);
+        await screen.RefreshPlayerViewAsync();
+        await screen.RefreshAvailableActionsAsync(true);
+        var before = transport.GameActionRequestCount;
+        transport.ActionFailureCode = "ACTION_NOT_AVAILABLE";
+        transport.ActionFailureMessage = "模拟招募准备资格变化";
+        await screen.BeginPartnerRecruitmentAsync();
+        AssertEqual(transport.GameActionRequestCount, before + 1, "招募准备只能提交一次 DRAW_PARTNER_OFFER");
+        AssertEqual(transport.LastActionRequest?.ActionType, "DRAW_PARTNER_OFFER", "招募准备行动类型必须准确");
+        AssertEqual(transport.LastActionRequest?.Payload?.Count ?? -1, 0, "招募准备 payload 必须为空对象");
+        AssertFalse(screen.WorkDiceOverlay.IsOpen, "准备被服务端拒绝时不得打开骰子");
+        transport.ActionFailureCode = null;
+        transport.ActionFailureMessage = "";
+        screen.PartnerOverlay.CloseOverlay();
+    }
+
+    private async Task VerifyPartnerUnknownResultRecoveryAsync(GameScreen screen, GameScreenTransport transport)
+    {
+        transport.SetPartnerAvailability(true, null);
+        await screen.RefreshAvailableActionsAsync(true);
+        transport.ActionFailureCode = "NETWORK_ERROR";
+        transport.ActionFailureMessage = "模拟伙伴招募首回执丢失";
+        transport.FailPendingCheck = true;
+        var before = transport.GameActionRequestCount;
+        await screen.BeginPartnerRecruitmentAsync();
+        var original = transport.LastActionRequest;
+        AssertEqual(transport.GameActionRequestCount, before + 1, "未知结果前只能发送一次伙伴招募准备");
+        AssertTrue(original != null, "未知结果必须保留原伙伴请求");
+
+        screen.PartnerOverlay.CloseOverlay();
+        await screen.BeginPartnerRecruitmentAsync();
+        AssertEqual(transport.GameActionRequestCount, before + 1,
+            "关闭并重新点击不得绕过未决伙伴请求创建新 requestId");
+
+        transport.FailPendingCheck = false;
+        transport.ActionFailureCode = null;
+        transport.ActionFailureMessage = "";
+        transport.PendingCheckResponses.Enqueue(ApiResult<PendingCheckDto>.Success(null!, "success", 200));
+        transport.PendingCheckResponses.Enqueue(ApiResult<PendingCheckDto>.Success(CreatePartnerPending(), "success", 200));
+        transport.ActionResponseFactory = request => ApiResult<GameActionResponseDto>.Success(
+            new GameActionResponseDto
+            {
+                GameId = 77,
+                OldStateVersion = request.StateVersion,
+                NewStateVersion = request.StateVersion,
+                ActionType = "DRAW_PARTNER_OFFER",
+                ResultType = "CHECK_ROLL_PENDING",
+                PendingCheck = CreatePartnerPending(),
+                PlayerViewState = GameScreenTransport.CloneView(transport.View)
+            }, "success", 200);
+        await DispatchViewportClickAsync(screen.PartnerOverlay.GetNode<Button>("Root/Center/Panel/Margin/Layout/Footer/RetryButton"));
+        await WaitUntilAsync(() => transport.GameActionRequestCount == before + 2
+            && !screen.IsPartnerSubmitting && screen.WorkDiceOverlay.IsOpen);
+        AssertEqual(transport.LastActionRequest?.RequestId, original!.RequestId,
+            "恢复伙伴准备必须复用原 requestId");
+        AssertEqual(transport.LastActionRequest?.StateVersion, original.StateVersion,
+            "恢复伙伴准备必须保留原 stateVersion");
+        AssertTrue(ReferenceEquals(transport.LastActionRequest, original),
+            "恢复伙伴准备必须复用完整原请求对象，不能按最新状态重建");
+        AssertTrue(screen.UnresolvedPartnerRequest == null, "当前 pending 已确认准备成功后必须结束未决伙伴上下文");
+        AssertTrue(transport.PendingCheckRequestCount >= 3,
+            "重放成功后必须再次查询 /checks/pending，不能直接打开历史 WAITING_ROLL");
+        transport.ActionResponseFactory = null;
+        screen.WorkDiceOverlay.CloseOverlay();
+
+        // 历史成功回执不能证明当前仍待投骰；二次查询已无 pending 时不得打开旧骰子。
+        transport.ActionFailureCode = "NETWORK_ERROR";
+        transport.ActionFailureMessage = "模拟第二次伙伴招募首回执丢失";
+        transport.FailPendingCheck = true;
+        var noPendingBefore = transport.GameActionRequestCount;
+        await screen.BeginPartnerRecruitmentAsync();
+        var noPendingOriginal = transport.LastActionRequest;
+        AssertTrue(noPendingOriginal != null, "无待判定恢复用例必须保留原请求");
+        transport.ActionFailureCode = null;
+        transport.ActionFailureMessage = "";
+        transport.FailPendingCheck = false;
+        transport.PendingCheckResponses.Enqueue(ApiResult<PendingCheckDto>.Success(null!, "success", 200));
+        transport.PendingCheckResponses.Enqueue(ApiResult<PendingCheckDto>.Success(null!, "success", 200));
+        transport.ActionResponseFactory = request => ApiResult<GameActionResponseDto>.Success(
+            new GameActionResponseDto
+            {
+                GameId = 77,
+                OldStateVersion = request.StateVersion,
+                NewStateVersion = request.StateVersion,
+                ActionType = "DRAW_PARTNER_OFFER",
+                ResultType = "CHECK_ROLL_PENDING",
+                PendingCheck = CreatePartnerPending(),
+                PlayerViewState = GameScreenTransport.CloneView(transport.View)
+            }, "success", 200);
+        screen.PartnerOverlay.ForceClose();
+        await screen.BeginPartnerRecruitmentAsync();
+        await DispatchViewportClickAsync(screen.PartnerOverlay.GetNode<Button>("Root/Center/Panel/Margin/Layout/Footer/RetryButton"));
+        await WaitUntilAsync(() => transport.GameActionRequestCount == noPendingBefore + 2
+            && !screen.IsPartnerSubmitting && screen.UnresolvedPartnerRequest == null);
+        AssertFalse(screen.WorkDiceOverlay.IsOpen, "二次查询已无 pending 时不得打开历史骰子");
+        AssertTrue(ReferenceEquals(transport.LastActionRequest, noPendingOriginal),
+            "无待判定恢复仍必须原样重放原请求");
+
+        // 重放后的权威 pending 查询失败时保留未决上下文，下一次恢复不得创建新身份。
+        transport.ActionResponseFactory = null;
+        transport.ActionFailureCode = "NETWORK_ERROR";
+        transport.ActionFailureMessage = "模拟第三次伙伴招募首回执丢失";
+        transport.FailPendingCheck = true;
+        var failedRecheckBefore = transport.GameActionRequestCount;
+        await screen.BeginPartnerRecruitmentAsync();
+        var failedRecheckOriginal = transport.LastActionRequest;
+        AssertTrue(failedRecheckOriginal != null, "复查失败用例必须保留原请求");
+        transport.ActionFailureCode = null;
+        transport.ActionFailureMessage = "";
+        transport.FailPendingCheck = false;
+        transport.PendingCheckResponses.Enqueue(ApiResult<PendingCheckDto>.Success(null!, "success", 200));
+        transport.PendingCheckResponses.Enqueue(ApiResult<PendingCheckDto>.Failure("模拟二次 pending 查询失败", "NETWORK_ERROR"));
+        transport.ActionResponseFactory = request => ApiResult<GameActionResponseDto>.Success(
+            new GameActionResponseDto
+            {
+                GameId = 77,
+                OldStateVersion = request.StateVersion,
+                NewStateVersion = request.StateVersion,
+                ActionType = "DRAW_PARTNER_OFFER",
+                ResultType = "CHECK_ROLL_PENDING",
+                PendingCheck = CreatePartnerPending(),
+                PlayerViewState = GameScreenTransport.CloneView(transport.View)
+            }, "success", 200);
+        screen.PartnerOverlay.ForceClose();
+        await screen.BeginPartnerRecruitmentAsync();
+        await DispatchViewportClickAsync(screen.PartnerOverlay.GetNode<Button>("Root/Center/Panel/Margin/Layout/Footer/RetryButton"));
+        await WaitUntilAsync(() => transport.GameActionRequestCount == failedRecheckBefore + 2
+            && !screen.IsPartnerSubmitting);
+        AssertFalse(screen.WorkDiceOverlay.IsOpen, "重放后的 pending 查询失败不得打开历史骰子");
+        AssertTrue(ReferenceEquals(screen.UnresolvedPartnerRequest, failedRecheckOriginal),
+            "重放后的权威查询失败必须保留原未决上下文");
+        AssertTrue(ReferenceEquals(transport.LastActionRequest, failedRecheckOriginal),
+            "复查失败不得生成新 requestId 或重建请求体");
+        transport.ActionResponseFactory = null;
+        transport.FailPendingCheck = false;
+        screen.PartnerOverlay.ForceClose();
+    }
+
+    private async Task VerifyPartnerSelectionAndFifoRoutingAsync(GameScreen screen, GameScreenTransport transport)
+    {
+        screen.WorkDiceOverlay.CloseOverlay();
+        screen.PartnerOverlay.ForceClose();
+        screen.QuestJournal.ForceClose();
+        transport.View.EngineState!.PendingReward = CreatePartnerReward(7301, 1001);
+        await screen.RefreshPlayerViewAsync();
+        AssertEqual(screen.PartnerOverlay.Mode, PartnerOverlayMode.Reward, "本人 PARTNER 队首必须进入伙伴层");
+        await DispatchViewportClickAsync(screen.PartnerOverlay.FindChild("Condition_704_2", true, false) as Button
+            ?? throw new InvalidOperationException("缺少杂物招募方式按钮"));
+        await DispatchViewportClickAsync(screen.PartnerOverlay.FindChild("Item_800", true, false) as Button
+            ?? throw new InvalidOperationException("缺少杂物手牌按钮"));
+        AssertTrue(screen.PartnerOverlay.IsConfirmationOpen, "选物后必须显示确认框");
+
+        await screen.RefreshPlayerViewAsync();
+        await screen.RefreshPlayerViewAsync();
+        AssertEqual(screen.PartnerOverlay.Mode, PartnerOverlayMode.ItemSelection, "轮询不得打断同一招募选物页");
+        AssertEqual(screen.PartnerOverlay.SelectedPlayerItemId, 800L, "轮询不得清空仍有效的选物实例");
+        AssertTrue(screen.PartnerOverlay.IsConfirmationOpen, "轮询不得打断仍有效的选物确认框");
+
+        var changed = CreatePartnerReward(7301, 1001);
+        changed.Candidates![0].RecruitConditions![1].CanExecute = false;
+        changed.Candidates![0].RecruitConditions![1].EligibleItems = [];
+        transport.View.EngineState.PendingReward = changed;
+        await screen.RefreshPlayerViewAsync();
+        AssertFalse(screen.PartnerOverlay.IsConfirmationOpen, "资格变化必须关闭旧选物确认");
+        AssertEqual(screen.PartnerOverlay.Mode, PartnerOverlayMode.Reward, "资格变化必须返回最新候选页");
+
+        var before = transport.GameActionRequestCount;
+        changed.Candidates[0].Configuration!.Id = null;
+        transport.View.EngineState.PendingReward = changed;
+        await screen.RecruitPartnerAsync(7301, 704, 1, 0);
+        AssertEqual(transport.GameActionRequestCount, before, "候选 configuration.id 无效时不得发送招募领取请求");
+
+        transport.View.EngineState.PendingReward = CreateItemReward(8101, 1001);
+        await screen.RefreshPlayerViewAsync();
+        AssertEqual(screen.QuestJournal.State, QuestJournalState.Reward, "PARTNER→ITEM 必须切换到唯一道具奖励层");
+        AssertFalse(screen.PartnerOverlay.IsOpen, "进入 ITEM 队首时必须关闭伙伴奖励层");
+
+        transport.View.EngineState.PendingReward = CreatePartnerReward(7302, 1001);
+        await screen.RefreshPlayerViewAsync();
+        AssertEqual(screen.PartnerOverlay.CurrentRewardId, 7302L, "ITEM→PARTNER 必须采用最新 rewardId");
+        AssertFalse(screen.QuestJournal.IsOpen, "进入 PARTNER 队首时必须关闭道具奖励层");
+
+        transport.View.EngineState.PendingReward = CreatePartnerReward(7303, 1001);
+        await screen.RefreshPlayerViewAsync();
+        AssertEqual(screen.PartnerOverlay.CurrentRewardId, 7303L, "同类连续队首必须替换为最新 rewardId");
+
+        transport.View.EngineState.PendingReward = CreatePartnerReward(7304, 1002);
+        await screen.RefreshPlayerViewAsync();
+        AssertFalse(screen.PartnerOverlay.IsOpen || screen.QuestJournal.IsOpen, "他人队首不得暴露私有候选");
+
+        transport.View.EngineState.PendingReward = null;
+        await screen.RefreshPlayerViewAsync();
+        AssertFalse(screen.PartnerOverlay.IsOpen || screen.QuestJournal.IsOpen, "队首清空后不得残留奖励交互层");
+    }
+
+    private async Task VerifyRewardInventoryBackRoutingAsync(GameScreen screen, GameScreenTransport transport)
+    {
+        screen.WorkDiceOverlay.CloseOverlay();
+        screen.PartnerOverlay.ForceClose();
+        screen.QuestJournal.ForceClose();
+        transport.View.EngineState!.PendingReward = CreateItemReward(8201, 1001, capacitySatisfied: true);
+        await screen.RefreshPlayerViewAsync();
+        var inventory = screen.QuestJournal.GetNode<Button>("Root/Center/Panel/Margin/Content/Settlement/RewardActions/InventoryButton");
+        AssertTrue(inventory.Visible && !inventory.Disabled, "即使容量未满或不能丢弃，奖励页也必须允许只读查看背包");
+        await DispatchViewportClickAsync(inventory);
+        await WaitUntilAsync(() => screen.QuestJournal.State == QuestJournalState.Inventory && transport.ItemRequestCount > 0);
+        var discard = screen.QuestJournal.FindChildren("*", "Button", true, false).OfType<Button>()
+            .FirstOrDefault(button => button.Text == "丢弃");
+        AssertTrue(discard != null && discard.Disabled, "不能整理时仍应显示持有实例并将具体丢弃操作置灰");
+
+        transport.View.EngineState.PendingReward = CreatePartnerReward(8202, 1001);
+        var close = screen.QuestJournal.GetNode<Button>("Root/Center/Panel/Margin/Content/Header/CloseButton");
+        await DispatchViewportClickAsync(close);
+        await WaitUntilAsync(() => screen.PartnerOverlay.CurrentRewardId == 8202);
+        AssertFalse(screen.QuestJournal.IsOpen, "从背包返回必须关闭旧 ITEM 奖励层");
+        AssertEqual(screen.PartnerOverlay.CurrentRewardId, 8202L, "从背包返回必须同步并路由最新权威队首");
+        screen.PartnerOverlay.ForceClose();
+        transport.View.EngineState.PendingReward = null;
+    }
+
+    private static PendingCheckDto CreatePartnerPending() => new()
+    {
+        CheckId = 991,
+        GameId = 77,
+        PlayerId = 1001,
+        StateVersion = 1,
+        AuthorizationRound = 1,
+        BusinessType = "PARTNER_RECRUIT",
+        Status = "WAITING_ROLL",
+        AttributeType = "SOCIAL",
+        CanConfirm = true,
+        CanReroll = true
+    };
+
+    private static PendingRewardDto CreatePartnerReward(long rewardId, long playerId) => new()
+    {
+        RewardId = rewardId,
+        PlayerId = playerId,
+        Kind = "PARTNER",
+        SourceType = "PARTNER_RECRUIT",
+        CanAbandon = true,
+        Candidates =
+        [
+            new RewardCandidateDto
+            {
+                CardId = 704,
+                PartnerId = 36,
+                Configuration = new ItemRewardConfigurationDto { Id = 36, PartnerCode = "CHEESE_SANDWICH", PartnerName = "起司派" },
+                RecruitConditions =
+                [
+                    new PartnerRecruitConditionDto { ConditionIndex = 1, Method = "DEFAULT_PRESTIGE", DisplayText = "3 声望", CanExecute = true },
+                    new PartnerRecruitConditionDto
+                    {
+                        ConditionIndex = 2,
+                        Method = "ITEM_CATEGORY_SPEND",
+                        DisplayText = "消耗 1 件杂物",
+                        CanExecute = true,
+                        EligibleItems = [new PartnerRecruitItemDto { PlayerItemId = 800, ItemId = 1005, ItemName = "花束", Location = "HAND" }],
+                        IneligibleItems = [new PartnerRecruitItemDto { PlayerItemId = 801, ItemId = 1013, ItemName = "魔法书", Location = "EQUIPPED" }]
+                    }
+                ]
+            }
+        ]
+    };
+
+    private static PendingRewardDto CreateItemReward(long rewardId, long playerId, bool capacitySatisfied = false) => new()
+    {
+        RewardId = rewardId,
+        PlayerId = playerId,
+        Kind = "ITEM",
+        SourceType = "QUEST_SETTLEMENT",
+        CanExecute = capacitySatisfied,
+        CanAbandon = true,
+        CapacitySatisfied = capacitySatisfied,
+        Candidates =
+        [
+            new RewardCandidateDto
+            {
+                CardId = 131,
+                ItemId = 1017,
+                CanExecute = capacitySatisfied,
+                CapacitySatisfied = capacitySatisfied,
+                ExecuteUnavailableReason = capacitySatisfied ? null : "负重已满",
+                Configuration = new ItemRewardConfigurationDto { Id = 1017, ItemName = "药剂", ItemType = "CONSUMABLE" }
+            }
+        ]
+    };
 
     private async Task VerifyPollingAndRefreshAsync(GameScreen screen, GameScreenTransport transport)
     {
         var otherPlayersList = screen.Hud.GetNode<VBoxContainer>(
             "HudRoot/LeftMargin/LeftRail/OtherPlayersPanel/OtherPlayersScroll/OtherPlayersList");
-        var entryBeforeRefresh = otherPlayersList.GetChildren().OfType<OtherPlayerHudEntry>().Single();
+        OtherPlayerHudEntry OtherEntry() => otherPlayersList.GetChildren().OfType<OtherPlayerHudEntry>()
+            .Single(entry => entry.Player?.UserId != 1);
+        var entryBeforeRefresh = OtherEntry();
         await DispatchViewportMoveAsync(entryBeforeRefresh.GetGlobalRect().GetCenter());
         var detailPanel = screen.Hud.GetNode<PanelContainer>("HudRoot/PlayerDetailPanel");
         AssertTrue(detailPanel.Visible, "鼠标停在其他玩家条目时应显示详情");
@@ -310,11 +637,8 @@ public partial class RunGameScreenTests : SceneTree
 
         AssertEqual(transport.PlayerViewRequestCount, before + 1, "轮询进行中必须跳过重入请求");
         AssertEqual(transport.MaxConcurrentPlayerViews, 1, "玩家视图请求不得重叠");
-        var coinsLabel = screen.Hud.GetNode<Label>(
-            "HudRoot/LeftMargin/LeftRail/CurrentPlayerPanel/StatusContent/CoinsBox/CoinsValue"
-        );
-        AssertEqual(coinsLabel.Text, "17", "刷新后应更新当前玩家数据");
-        var entryAfterRefresh = otherPlayersList.GetChildren().OfType<OtherPlayerHudEntry>().Single();
+        AssertEqual(screen.Hud.CurrentCoinsText, "17", "刷新后应更新当前玩家数据");
+        var entryAfterRefresh = OtherEntry();
         AssertTrue(ReferenceEquals(entryBeforeRefresh, entryAfterRefresh),
             "玩家视图轮询必须复用同一其他玩家条目");
         AssertTrue(detailPanel.Visible, "鼠标持续停留时详情不得因轮询消失");
@@ -327,7 +651,7 @@ public partial class RunGameScreenTests : SceneTree
         transport.View.Players[1].Coins = 31;
         await screen.RefreshPlayerViewAsync();
         AssertTrue(ReferenceEquals(entryBeforeRefresh,
-                otherPlayersList.GetChildren().OfType<OtherPlayerHudEntry>().Single()),
+                OtherEntry()),
             "多次轮询不得替换鼠标所在的玩家条目");
         AssertEqual(
             screen.Hud.GetNode<Label>("HudRoot/PlayerDetailPanel/ContentMargin/Content/ResourceRow/CoinsValue").Text,
@@ -372,14 +696,12 @@ public partial class RunGameScreenTests : SceneTree
         );
         transport.ActionGate = actionGate;
         var endTurnButton = screen.Hud.GetNode<Button>(
-            "HudRoot/ActionMenuAnchor/ActionMenu/MenuPanel/MenuMargin/Menu/EndTurnSlot/EndTurnButton"
+            "HudRoot/BottomBar/BarContent/ActionCluster/EndTurnSlot/EndTurnButton"
         );
         AssertTrue(screen.Hud.EndTurnVisible, "提交前结束回合入口必须可见");
         AssertFalse(screen.Hud.EndTurnDisabled,
             $"提交前结束回合必须可点击，当前原因：{screen.Hud.EndTurnTooltip}");
-        await DispatchViewportClickAsync(screen.Hud.ActionMenuButton);
-        AssertTrue(screen.Hud.IsActionMenuOpen, "真实 GUI 点击后行为菜单必须展开");
-        AssertTrue(endTurnButton.IsVisibleInTree(), "行为菜单展开后结束回合按钮必须在场景树中可见");
+        AssertTrue(endTurnButton.IsVisibleInTree(), "结束回合圆章在本人回合必须直接可见（无需展开菜单）");
         await DispatchViewportClickAsync(endTurnButton);
         await DispatchViewportClickAsync(endTurnButton);
         await WaitUntilAsync(() => transport.GameActionInFlight == 1);
@@ -686,7 +1008,8 @@ public partial class RunGameScreenTests : SceneTree
         public List<AvailableActionDto> AvailableActions { get; private set; } =
         [
             new AvailableActionDto { ActionType = "END_TURN", ActionTypeText = "结束回合", Available = true },
-            new AvailableActionDto { ActionType = "MOVE_ONE_STEP", ActionTypeText = "移动一步", Available = true }
+            new AvailableActionDto { ActionType = "MOVE_ONE_STEP", ActionTypeText = "移动一步", Available = true },
+            new AvailableActionDto { ActionType = "DRAW_PARTNER_OFFER", ActionTypeText = "招募伙伴", Available = true }
         ];
         public List<string> Paths { get; } = [];
         public int MapRequestCount { get; private set; }
@@ -694,11 +1017,16 @@ public partial class RunGameScreenTests : SceneTree
         public int AvailableActionsRequestCount { get; private set; }
         public int ConnectionRequestCount { get; private set; }
         public int GameActionRequestCount { get; private set; }
+        public int PartnerRequestCount { get; private set; }
+        public int PendingCheckRequestCount { get; private set; }
+        public int ItemRequestCount { get; private set; }
         public int PlayerViewInFlight { get; private set; }
         public int GameActionInFlight { get; private set; }
         public int MaxConcurrentPlayerViews { get; private set; }
         public int DelayMilliseconds { get; set; } = 2;
         public bool FailPlayerView { get; set; }
+        public bool FailPartnerSnapshot { get; set; }
+        public bool FailPendingCheck { get; set; }
         public bool AdvanceOtherPlayerStatsOnPoll { get; set; }
         public string? LastAvailableActionsPlayerId { get; private set; }
         public HttpClient.Method LastAvailableActionsMethod { get; private set; }
@@ -709,6 +1037,8 @@ public partial class RunGameScreenTests : SceneTree
         public List<string> ActionRequestIds { get; } = [];
         public string? ActionFailureCode { get; set; }
         public string ActionFailureMessage { get; set; } = "";
+        public Queue<ApiResult<PendingCheckDto>> PendingCheckResponses { get; } = new();
+        public Func<GameActionRequestDto, ApiResult<GameActionResponseDto>>? ActionResponseFactory { get; set; }
         public Action? ActionRequestCallback { get; set; }
         public TaskCompletionSource<ApiResult<PlayerViewResponseDto>>? PlayerViewGate { get; set; }
         public TaskCompletionSource<ApiResult<GameActionResponseDto>>? ActionGate { get; set; }
@@ -815,6 +1145,81 @@ public partial class RunGameScreenTests : SceneTree
                 );
             }
 
+            if (path == "/games/77/partners" && typeof(T) == typeof(PlayerPartnerListResponseDto))
+            {
+                PartnerRequestCount++;
+                await Task.Delay(DelayMilliseconds);
+                if (FailPartnerSnapshot)
+                {
+                    return ApiResult<T>.Failure("模拟伙伴列表失败", "NETWORK_ERROR");
+                }
+                var snapshot = new PlayerPartnerListResponseDto
+                {
+                    GameId = 77,
+                    PlayerId = 1001,
+                    StateVersion = View.StateVersion,
+                    Dismissal = new PartnerDismissalAvailabilityDto
+                    {
+                        CanExecute = true,
+                        SocialCost = 2
+                    },
+                    Partners =
+                    [
+                        new PlayerPartnerDto
+                        {
+                            PlayerPartnerId = 301,
+                            PartnerId = 24,
+                            PartnerCode = "BIG_MAC",
+                            PartnerName = "大麦",
+                            Status = "ACTIVE",
+                            Dismissal = new PartnerDismissalAvailabilityDto
+                            {
+                                CanExecute = true,
+                                SocialCost = 2
+                            }
+                        }
+                    ]
+                };
+                return (ApiResult<T>)(object)ApiResult<PlayerPartnerListResponseDto>.Success(snapshot, "success", 200);
+            }
+
+            if (path == "/games/77/checks/pending" && typeof(T) == typeof(PendingCheckDto))
+            {
+                PendingCheckRequestCount++;
+                await Task.Delay(DelayMilliseconds);
+                if (PendingCheckResponses.Count > 0)
+                {
+                    return (ApiResult<T>)(object)PendingCheckResponses.Dequeue();
+                }
+                return FailPendingCheck
+                    ? ApiResult<T>.Failure("模拟待判定查询失败", "NETWORK_ERROR")
+                    : (ApiResult<T>)(object)ApiResult<PendingCheckDto>.Success(null!, "success", 200);
+            }
+
+            if (path == "/games/77/items" && typeof(T) == typeof(PlayerItemsResponseDto))
+            {
+                ItemRequestCount++;
+                await Task.Delay(DelayMilliseconds);
+                return (ApiResult<T>)(object)ApiResult<PlayerItemsResponseDto>.Success(
+                    new PlayerItemsResponseDto
+                    {
+                        GameId = 77,
+                        PlayerId = 1001,
+                        Items =
+                        [
+                            new PlayerItemDto
+                            {
+                                PlayerItemId = 800,
+                                ItemId = 1005,
+                                ItemName = "花束",
+                                ItemType = "CONSUMABLE",
+                                Location = "HAND",
+                                LocationText = "手牌"
+                            }
+                        ]
+                    }, "success", 200);
+            }
+
             if (path == "/games/77/players/1001/movable-cells" && typeof(T) == typeof(List<MapCellDto>))
             {
                 var target = Map.Cells?.FirstOrDefault(cell => cell.CellCode != "A10")
@@ -855,6 +1260,11 @@ public partial class RunGameScreenTests : SceneTree
                     await Task.Delay(DelayMilliseconds);
                     result = ApiResult<GameActionResponseDto>.Failure(ActionFailureMessage, ActionFailureCode);
                 }
+                else if (LastActionRequest != null && ActionResponseFactory != null)
+                {
+                    await Task.Delay(DelayMilliseconds);
+                    result = ActionResponseFactory(LastActionRequest);
+                }
                 else
                 {
                     await Task.Delay(DelayMilliseconds);
@@ -882,17 +1292,32 @@ public partial class RunGameScreenTests : SceneTree
 
         public void SetEndTurnAvailability(bool available, string? reasonText)
         {
-            AvailableActions =
-            [
-                new AvailableActionDto
+            AvailableActions = AvailableActions
+                .Where(action => !string.Equals(action.ActionType, "END_TURN", StringComparison.OrdinalIgnoreCase))
+                .Prepend(new AvailableActionDto
                 {
                     ActionType = "END_TURN",
                     ActionTypeText = "结束回合",
                     Available = available,
                     Reason = available ? null : "END_TURN_BLOCKED",
                     ReasonText = reasonText
-                }
-            ];
+                })
+                .ToList();
+        }
+
+        public void SetPartnerAvailability(bool available, string? reasonText)
+        {
+            AvailableActions = AvailableActions
+                .Where(action => !string.Equals(action.ActionType, "DRAW_PARTNER_OFFER", StringComparison.OrdinalIgnoreCase))
+                .Append(new AvailableActionDto
+                {
+                    ActionType = "DRAW_PARTNER_OFFER",
+                    ActionTypeText = "招募伙伴",
+                    Available = available,
+                    Reason = available ? null : "PARTNER_RECRUIT_BLOCKED",
+                    ReasonText = reasonText
+                })
+                .ToList();
         }
 
         public static PlayerViewResponseDto CloneView(PlayerViewResponseDto source)
@@ -921,6 +1346,7 @@ public partial class RunGameScreenTests : SceneTree
                         PendingCheck = source.EngineState.PendingCheck,
                         MovementRulesVersion = source.EngineState.MovementRulesVersion,
                         QuestSubmissionVersion = source.EngineState.QuestSubmissionVersion,
+                        PartnerRecruitmentVersion = source.EngineState.PartnerRecruitmentVersion,
                         ConnectionPolicy = source.EngineState.ConnectionPolicy == null
                             ? null
                             : CreateConnectionPolicy()
@@ -984,7 +1410,11 @@ public partial class RunGameScreenTests : SceneTree
                 CurrentTurnUserId = 1,
                 CurrentTurnSeq = 1,
                 StateVersion = 1,
-                EngineState = new EngineStateDto { ConnectionPolicy = CreateConnectionPolicy() },
+                EngineState = new EngineStateDto
+                {
+                    PartnerRecruitmentVersion = 1,
+                    ConnectionPolicy = CreateConnectionPolicy()
+                },
                 Players =
                 [
                     CreatePlayer(1001, 1, "GPT1", 1, 5, 3),

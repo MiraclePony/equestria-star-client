@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Collections.Generic;
 
@@ -518,6 +519,10 @@ public sealed class EngineStateDto
     // 只有新鲜 player-view 明确返回 1 时才开放普通任务主动提交。
     [JsonPropertyName("questSubmissionVersion")]
     public int? QuestSubmissionVersion { get; set; }
+
+    // 只有新鲜 player-view 明确返回 1 时才开放新版伙伴招募与独立遣散写操作。
+    [JsonPropertyName("partnerRecruitmentVersion")]
+    public int? PartnerRecruitmentVersion { get; set; }
 }
 
 public sealed class PendingRewardDto
@@ -573,9 +578,12 @@ public sealed class RewardCandidateDto
     [JsonPropertyName("cardId")]
     public long? CardId { get; set; }
 
-    // 当前客户端只处理 ITEM 奖励；字段缺失时不以 cardId 冒充 itemId。
+    // ITEM 与 PARTNER 奖励共用候选外壳；字段缺失时不以 cardId 冒充配置 ID。
     [JsonPropertyName("itemId")]
     public long? ItemId { get; set; }
+
+    [JsonPropertyName("partnerId")]
+    public long? PartnerId { get; set; }
 
     [JsonPropertyName("canExecute")]
     public bool? CanExecute { get; set; }
@@ -588,6 +596,10 @@ public sealed class RewardCandidateDto
 
     [JsonPropertyName("configuration")]
     public ItemRewardConfigurationDto? Configuration { get; set; }
+
+    // 新版伙伴候选必须逐行读取服务端资格，不能使用旧候选级 canExecute。
+    [JsonPropertyName("recruitConditions")]
+    public List<PartnerRecruitConditionDto>? RecruitConditions { get; set; }
 }
 
 // ITEM 候选携带的是本局冻结配置，不是玩家持有实例。
@@ -629,6 +641,97 @@ public sealed class ItemRewardConfigurationDto
 
     [JsonPropertyName("updated_at")]
     public string? UpdatedAt { get; set; }
+
+    // PARTNER 候选与 ITEM 候选共用 configuration 节点；字段仍按冻结配置 snake_case 解析。
+    [JsonPropertyName("partner_id")]
+    public long? PartnerId { get; set; }
+
+    [JsonPropertyName("partner_code")]
+    public string? PartnerCode { get; set; }
+
+    [JsonPropertyName("partner_name")]
+    public string? PartnerName { get; set; }
+
+    [JsonPropertyName("partner_type")]
+    public string? PartnerType { get; set; }
+}
+
+public sealed class PartnerRecruitConditionDto
+{
+    [JsonPropertyName("conditionIndex")]
+    public int? ConditionIndex { get; set; }
+    [JsonPropertyName("method")]
+    public string? Method { get; set; }
+    [JsonPropertyName("displayText")]
+    public string? DisplayText { get; set; }
+    [JsonPropertyName("conditionSatisfied")]
+    public bool? ConditionSatisfied { get; set; }
+    [JsonPropertyName("requiresOrganization")]
+    public bool? RequiresOrganization { get; set; }
+    [JsonPropertyName("canExecute")]
+    public bool? CanExecute { get; set; }
+    [JsonPropertyName("unavailableReasonCode")]
+    public string? UnavailableReasonCode { get; set; }
+    [JsonPropertyName("unavailableReason")]
+    public string? UnavailableReason { get; set; }
+    [JsonPropertyName("cost")]
+    public PartnerRecruitCostDto? Cost { get; set; }
+    [JsonPropertyName("requirements")]
+    public PartnerRecruitRequirementsDto? Requirements { get; set; }
+    [JsonPropertyName("eligibleItems")]
+    public List<PartnerRecruitItemDto>? EligibleItems { get; set; }
+    [JsonPropertyName("ineligibleItems")]
+    public List<PartnerRecruitItemDto>? IneligibleItems { get; set; }
+}
+
+public sealed class PartnerRecruitCostDto
+{
+    [JsonPropertyName("prestige")]
+    public int? Prestige { get; set; }
+    [JsonPropertyName("coins")]
+    public int? Coins { get; set; }
+    [JsonPropertyName("social")]
+    public int? Social { get; set; }
+    [JsonPropertyName("itemQuantity")]
+    public int? ItemQuantity { get; set; }
+}
+
+public sealed class PartnerRecruitRequirementsDto
+{
+    [JsonPropertyName("lowestEquivalentPrestige")]
+    public bool? LowestEquivalentPrestige { get; set; }
+    [JsonPropertyName("item")]
+    public PartnerRecruitItemRequirementDto? Item { get; set; }
+}
+
+public sealed class PartnerRecruitItemRequirementDto
+{
+    [JsonPropertyName("itemId")]
+    public long? ItemId { get; set; }
+    [JsonPropertyName("itemCategory")]
+    public string? ItemCategory { get; set; }
+    [JsonPropertyName("quantity")]
+    public int? Quantity { get; set; }
+    [JsonPropertyName("consumed")]
+    public bool? Consumed { get; set; }
+}
+
+public sealed class PartnerRecruitItemDto
+{
+    [JsonPropertyName("playerItemId")]
+    public long? PlayerItemId { get; set; }
+    [JsonPropertyName("itemId")]
+    public long? ItemId { get; set; }
+    [JsonPropertyName("gameItemCardId")]
+    public long? GameItemCardId { get; set; }
+    [JsonPropertyName("itemName")]
+    public string? ItemName { get; set; }
+    [JsonPropertyName("location")]
+    public string? Location { get; set; }
+    [JsonPropertyName("unavailableReasonCode")]
+    public string? UnavailableReasonCode { get; set; }
+    [JsonPropertyName("unavailableReason")]
+    public string? UnavailableReason { get; set; }
 }
 
 public sealed class CurrentWorkResponseDto
@@ -1423,6 +1526,51 @@ public sealed class ShopBoughtItemDto
     public string? LocationText { get; set; }
 }
 
+public sealed class ShopRefreshResultDto
+{
+    [JsonPropertyName("socialCost")]
+    public int? SocialCost { get; set; }
+
+    [JsonPropertyName("socialAfter")]
+    public int? SocialAfter { get; set; }
+
+    [JsonPropertyName("items")]
+    public List<ShopShelfItemDto>? Items { get; set; }
+}
+
+public sealed class ItemSellResultDto
+{
+    [JsonPropertyName("playerItemId")]
+    public long? PlayerItemId { get; set; }
+
+    [JsonPropertyName("itemId")]
+    public long? ItemId { get; set; }
+
+    [JsonPropertyName("itemName")]
+    public string? ItemName { get; set; }
+
+    [JsonPropertyName("itemType")]
+    public string? ItemType { get; set; }
+
+    [JsonPropertyName("itemTypeText")]
+    public string? ItemTypeText { get; set; }
+
+    [JsonPropertyName("locationAfter")]
+    public string? LocationAfter { get; set; }
+
+    [JsonPropertyName("locationAfterText")]
+    public string? LocationAfterText { get; set; }
+
+    [JsonPropertyName("sellPrice")]
+    public int? SellPrice { get; set; }
+
+    [JsonPropertyName("coinsAfter")]
+    public int? CoinsAfter { get; set; }
+
+    [JsonPropertyName("prestigeAfter")]
+    public int? PrestigeAfter { get; set; }
+}
+
 public sealed class ItemUseResultDto
 {
     [JsonPropertyName("playerItemId")]
@@ -1626,6 +1774,12 @@ public sealed class GameActionResponseDto
     [JsonPropertyName("shopBuy")]
     public ShopBuyResultDto? ShopBuy { get; set; }
 
+    [JsonPropertyName("shopRefresh")]
+    public ShopRefreshResultDto? ShopRefresh { get; set; }
+
+    [JsonPropertyName("itemSell")]
+    public ItemSellResultDto? ItemSell { get; set; }
+
     [JsonPropertyName("itemUse")]
     public ItemUseResultDto? ItemUse { get; set; }
 
@@ -1646,6 +1800,56 @@ public sealed class GameActionResponseDto
 
     [JsonPropertyName("questSettlement")]
     public QuestSettlementDto? QuestSettlement { get; set; }
+
+    [JsonPropertyName("partnerRecruit")]
+    public PartnerRecruitResultDto? PartnerRecruit { get; set; }
+
+    [JsonPropertyName("partnerDismissal")]
+    public PartnerDismissalResultDto? PartnerDismissal { get; set; }
+}
+
+public sealed class PartnerRecruitResultDto
+{
+    [JsonPropertyName("playerPartnerId")]
+    public long? PlayerPartnerId { get; set; }
+    [JsonPropertyName("partnerId")]
+    public long? PartnerId { get; set; }
+    [JsonPropertyName("status")]
+    public string? Status { get; set; }
+    [JsonPropertyName("coinsAfter")]
+    public int? CoinsAfter { get; set; }
+    [JsonPropertyName("prestigeAfter")]
+    public int? PrestigeAfter { get; set; }
+    [JsonPropertyName("socialAfter")]
+    public int? SocialAfter { get; set; }
+    [JsonPropertyName("payment")]
+    public PartnerRecruitPaymentDto? Payment { get; set; }
+}
+
+public sealed class PartnerRecruitPaymentDto
+{
+    [JsonPropertyName("conditionIndex")]
+    public int? ConditionIndex { get; set; }
+    [JsonPropertyName("method")]
+    public string? Method { get; set; }
+    [JsonPropertyName("cost")]
+    public PartnerRecruitCostDto? Cost { get; set; }
+    [JsonPropertyName("playerItemId")]
+    public long? PlayerItemId { get; set; }
+}
+
+public sealed class PartnerDismissalResultDto
+{
+    [JsonPropertyName("playerPartnerId")]
+    public long? PlayerPartnerId { get; set; }
+    [JsonPropertyName("partnerId")]
+    public long? PartnerId { get; set; }
+    [JsonPropertyName("status")]
+    public string? Status { get; set; }
+    [JsonPropertyName("socialCost")]
+    public int? SocialCost { get; set; }
+    [JsonPropertyName("currentSocialPoints")]
+    public int? CurrentSocialPoints { get; set; }
 }
 
 public sealed class QuestSettlementDto
@@ -1722,4 +1926,126 @@ public sealed class GameMovementResultDto
 
     [JsonPropertyName("stayReason")]
     public string? StayReason { get; set; }
+}
+
+/// <summary>GET /games/{gameId}/partners 的只读返回。</summary>
+public sealed class PlayerPartnerListResponseDto
+{
+    [JsonPropertyName("gameId")]
+    public long? GameId { get; set; }
+
+    [JsonPropertyName("playerId")]
+    public long? PlayerId { get; set; }
+
+    [JsonPropertyName("stateVersion")]
+    public long? StateVersion { get; set; }
+
+    [JsonPropertyName("dismissal")]
+    public PartnerDismissalAvailabilityDto? Dismissal { get; set; }
+
+    [JsonPropertyName("partners")]
+    public List<PlayerPartnerDto>? Partners { get; set; }
+}
+
+public sealed class PlayerPartnerDto
+{
+    [JsonPropertyName("playerPartnerId")]
+    public long? PlayerPartnerId { get; set; }
+
+    [JsonPropertyName("partnerId")]
+    public long? PartnerId { get; set; }
+
+    [JsonPropertyName("partnerCode")]
+    public string? PartnerCode { get; set; }
+
+    [JsonPropertyName("partnerName")]
+    public string? PartnerName { get; set; }
+
+    [JsonPropertyName("partnerType")]
+    public string? PartnerType { get; set; }
+
+    [JsonPropertyName("partnerTypeText")]
+    public string? PartnerTypeText { get; set; }
+
+    [JsonPropertyName("description")]
+    public string? Description { get; set; }
+
+    [JsonPropertyName("attrStrength")]
+    public string? AttrStrength { get; set; }
+    [JsonPropertyName("attrSpeed")]
+    public string? AttrSpeed { get; set; }
+    [JsonPropertyName("attrSocial")]
+    public string? AttrSocial { get; set; }
+    [JsonPropertyName("attrCharm")]
+    public string? AttrCharm { get; set; }
+    [JsonPropertyName("attrMagic")]
+    public string? AttrMagic { get; set; }
+    [JsonPropertyName("attrMind")]
+    public string? AttrMind { get; set; }
+    [JsonPropertyName("recruitCondition")]
+    public string? RecruitCondition { get; set; }
+    [JsonPropertyName("skillOne")]
+    public string? SkillOne { get; set; }
+    [JsonPropertyName("skillTwo")]
+    public string? SkillTwo { get; set; }
+    [JsonPropertyName("bondSkill")]
+    public string? BondSkill { get; set; }
+
+    [JsonPropertyName("status")]
+    public string? Status { get; set; }
+
+    [JsonPropertyName("statusText")]
+    public string? StatusText { get; set; }
+
+    [JsonPropertyName("dismissal")]
+    public PartnerDismissalAvailabilityDto? Dismissal { get; set; }
+}
+
+public sealed class PartnerDismissalAvailabilityDto
+{
+    [JsonPropertyName("canExecute")]
+    public bool? CanExecute { get; set; }
+    [JsonPropertyName("unavailableReasonCode")]
+    public string? UnavailableReasonCode { get; set; }
+    [JsonPropertyName("unavailableReason")]
+    public string? UnavailableReason { get; set; }
+    [JsonPropertyName("socialCost")]
+    public int? SocialCost { get; set; }
+}
+
+/// <summary>GET /games/{gameId}/action-logs 的单条记录。</summary>
+public sealed class ActionLogDto
+{
+    [JsonPropertyName("logId")]
+    public long? LogId { get; set; }
+
+    [JsonPropertyName("gameId")]
+    public long? GameId { get; set; }
+
+    [JsonPropertyName("stateVersion")]
+    public long? StateVersion { get; set; }
+
+    [JsonPropertyName("playerId")]
+    public long? PlayerId { get; set; }
+
+    [JsonPropertyName("playerName")]
+    public string? PlayerName { get; set; }
+
+    [JsonPropertyName("actionType")]
+    public string? ActionType { get; set; }
+
+    [JsonPropertyName("actionTypeText")]
+    public string? ActionTypeText { get; set; }
+
+    [JsonPropertyName("message")]
+    public string? Message { get; set; }
+
+    [JsonPropertyName("rawMessageText")]
+    public string? RawMessageText { get; set; }
+
+    [JsonPropertyName("rawMessage")]
+    public JsonElement? RawMessage { get; set; }
+
+    [JsonPropertyName("createdAt")]
+    public string? CreatedAt { get; set; }
 }

@@ -27,6 +27,7 @@ $required = @(
   "scenes/game/ui/CardViewerOverlay.tscn",
   "scenes/game/ui/InventoryItemCard.tscn",
   "scenes/game/ui/QuestJournalOverlay.tscn",
+  "scenes/game/ui/PartnerOverlay.tscn",
   "scenes/game/ui/QuestTargetSubmissionOverlay.tscn",
   "scenes/game/ui/QuestTaskCard.tscn",
   "scenes/game/ui/GameHudDemo.tscn",
@@ -54,6 +55,7 @@ $required = @(
   "scripts/state/RoomListModel.cs",
   "scripts/state/RoomStateModel.cs",
   "scripts/state/CharacterSelectionModel.cs",
+  "scripts/state/PartnerSystemModel.cs",
   "scripts/game/map/HexCellData.cs",
   "scripts/game/map/HexCellMeshFactory.cs",
   "scripts/game/map/HexCell3D.cs",
@@ -89,6 +91,7 @@ $required = @(
   "scripts/game/ui/QuestJournalOverlay.cs",
   "scripts/game/ui/QuestTaskCard.cs",
   "scripts/game/ui/QuestSystemModel.cs",
+  "scripts/game/ui/PartnerOverlay.cs",
   "scripts/game/ui/QuestTargetSubmissionModel.cs",
   "scripts/game/ui/GameHudDemo.cs",
   "scripts/game/ui/OtherPlayerHudEntry.cs",
@@ -113,6 +116,8 @@ $required = @(
   "scripts/ui/GameScreen.cs",
   "scripts/ui/GameScreen.Items.cs",
   "scripts/ui/GameScreen.Quests.cs",
+  "scripts/ui/GameScreen.Partners.cs",
+  "scripts/ui/GameScreen.RecoverableActions.cs",
   "scripts/ui/GameScreen.QuestChecks.cs",
   "scripts/ui/GameScreen.QuestTargetSubmissions.cs",
   "scripts/game/ui/QuestCheckModel.cs",
@@ -132,6 +137,7 @@ $required = @(
   "tests/RunPlayerMoveTests.cs",
   "tests/RunMovementV2Tests.cs",
   "tests/RunQuestSystemTests.cs",
+  "tests/RunPartnerSystemTests.cs",
   "tests/RunMapSmokeTest.cs",
   "tests/RunDiceTests.cs",
   "tests/RunWorkFlowTests.cs",
@@ -171,8 +177,8 @@ $itemRequestFactoryAssignments = [regex]::Matches(
   $gameScreenSource,
   'ItemSystemModel\.(CreateShopBuyRequest|CreateItemRequest)\([\s\S]{0,400}?CreateGameActionRequestId\(\)'
 ).Count
-if (($actionRequestIdAssignments + $workRequestFactoryAssignments + $itemRequestFactoryAssignments) -ne 14) {
-  throw "Each move, turn, quest, reward, discard, work, check and item operation must create one requestId per logical action."
+if (($actionRequestIdAssignments + $workRequestFactoryAssignments + $itemRequestFactoryAssignments) -ne 17) {
+  throw "Each move, turn, quest, reward, discard, work, check, item and board refresh operation must create one requestId per logical action."
 }
 
 if ($gameScreenSource -match 'PLAY_ITEM') {

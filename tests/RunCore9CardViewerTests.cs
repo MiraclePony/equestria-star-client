@@ -57,6 +57,15 @@ public partial class RunCore9CardViewerTests : SceneTree
         screen.GetNode<Timer>("PlayerViewTimer").Stop();
 
         VerifyInputRouting(screen);
+        if (OS.GetCmdlineUserArgs().Contains("--commerce-visual-check"))
+        {
+            await screen.OpenShopShelfAsync();
+            GD.Print("商店与任务板视觉检查已就绪：可使用真实鼠标验证出售、货架刷新、任务板刷新及确认/取消输入。");
+            while (true)
+            {
+                await ToSignal(this, SceneTree.SignalName.ProcessFrame);
+            }
+        }
         if (OS.GetCmdlineUserArgs().Contains("--item-visual-check"))
         {
             await screen.OpenInventoryAsync();
@@ -69,7 +78,16 @@ public partial class RunCore9CardViewerTests : SceneTree
         await VerifyQualificationFailureAsync(screen, transport);
         await VerifyShopShelfAsync(screen, transport);
         await VerifyItemSystemAsync(screen, transport);
-        VerifyCardCounts(screen.CardViewer);
+        await VerifyShopSellAndRefreshAsync(screen, transport);
+        await VerifyQuestBoardRefreshAsync(screen, transport);
+        try
+        {
+            VerifyCardCounts(screen.CardViewer);
+        }
+        catch (Exception exception)
+        {
+            _failures.Add($"卡牌数量布局测试异常：{exception.Message}");
+        }
         await VerifyLateResponseAndRetryAsync(screen, transport);
         await VerifyMissingArtErrorsAsync(screen, transport);
         await VerifyPersonalQuestsAsync(screen, transport);
@@ -540,8 +558,8 @@ public partial class RunCore9CardViewerTests : SceneTree
         await WaitUntilAsync(() => !screen.IsItemSystemSubmitting && screen.CardViewer.State == CardViewerState.Error);
         AssertEqual(transport.ActionRequestCount, writesBeforeUnknown + 1,
             "网络未知结果不得自动创建新 requestId 重发道具行动");
-        AssertTrue(screen.CardViewer.ErrorText.Contains("结果未知", StringComparison.Ordinal),
-            "网络未知结果应明确提示只同步、不自动重发");
+        AssertTrue(screen.CardViewer.RetryVisible,
+            "非本批道具行动的未知结果应保留只读重试入口且不自动重发");
         var writesBeforeRetry = transport.ActionRequestCount;
         screen.CardViewer.RequestRetry();
         await WaitUntilAsync(() => screen.CardViewer.State == CardViewerState.Content);
@@ -736,6 +754,171 @@ public partial class RunCore9CardViewerTests : SceneTree
             screen.MapScene.MapEmptyClicked -= OnMapEmptyClicked;
             screen.CloseCardViewer();
         }
+    }
+
+    private async Task VerifyShopSellAndRefreshAsync(GameScreen screen, Core9Transport transport)
+    {
+        const string actions = "OverlayRoot/Center/Layout/ContentState/ShopActions";
+        const string decision = "OverlayRoot/DecisionLayer/Center/Panel/Margin/Content/Actions";
+        var sell = screen.CardViewer.GetNode<Button>($"{actions}/SellButton");
+        var refresh = screen.CardViewer.GetNode<Button>($"{actions}/RefreshButton");
+        var confirm = screen.CardViewer.GetNode<Button>($"{decision}/ConfirmButton");
+        var cancel = screen.CardViewer.GetNode<Button>($"{decision}/CancelButton");
+
+        transport.ShopResponse.AccessAllowed = false;
+        await screen.OpenShopShelfAsync();
+        AssertTrue(sell.Disabled && refresh.Disabled, "不在集市时可查看但不能出售或刷新");
+        transport.ShopResponse.AccessAllowed = true;
+        transport.ShopRefreshAvailable = false;
+        await screen.OpenShopShelfAsync();
+        AssertTrue(refresh.Disabled && !sell.Disabled, "刷新资格独立于出售");
+        transport.ShopRefreshAvailable = true;
+        await screen.OpenShopShelfAsync();
+
+        var writes = transport.ActionRequestCount;
+        await DispatchViewportClickAsync(refresh);
+        AssertTrue(screen.CardViewer.DecisionVisible, "刷新货架需要确认");
+        await DispatchViewportClickAsync(cancel);
+        AssertEqual(transport.ActionRequestCount, writes, "取消刷新不得提交");
+        transport.DropNextRecoverableActionResponseAfterExecution = true;
+        var refreshExecutions = transport.ShopRefreshExecutionCount;
+        var requestHistoryStart = transport.ActionRequestBodies.Count;
+        await DispatchViewportClickAsync(refresh);
+        await DispatchViewportClickAsync(confirm);
+        await WaitUntilAsync(() => !screen.IsItemSystemSubmitting && screen.CardViewer.State == CardViewerState.Content);
+        AssertEqual(transport.ActionRequestCount, writes + 2, "首次回执丢失后应自动原样恢复一次");
+        AssertEqual(transport.ShopRefreshExecutionCount, refreshExecutions + 1, "幂等恢复不得重复刷新货架");
+        AssertEqual(transport.ActionRequestBodies.Count, requestHistoryStart + 2, "自动恢复应记录两次 HTTP 请求");
+        AssertEqual(transport.ActionRequestBodies[^1], transport.ActionRequestBodies[^2],
+            "自动恢复须保持原请求 ID、版本和完整请求体");
+        AssertEqual(transport.LastActionRequest?.ActionType, "SHOP_REFRESH", "刷新必须调用现有行动");
+        AssertEqual(transport.LastActionRequest?.Payload.Count, 0, "刷新不传自定费用或候选");
+        AssertTrue(screen.CardViewer.DisplayedCards.Any(card => card.ShelfSlotId == 501),
+            "刷新后按最新权威货架展示");
+
+        writes = transport.ActionRequestCount;
+        requestHistoryStart = transport.ActionRequestBodies.Count;
+        transport.UnknownRecoverableActionResponsesRemaining = 2;
+        await DispatchViewportClickAsync(refresh);
+        await DispatchViewportClickAsync(confirm);
+        await WaitUntilAsync(() => !screen.IsItemSystemSubmitting && screen.CardViewer.State == CardViewerState.Error);
+        AssertEqual(transport.ActionRequestCount, writes + 2, "自动恢复最多尝试一次");
+        AssertEqual(transport.ActionRequestBodies[^1], transport.ActionRequestBodies[^2],
+            "两次未知结果也必须使用相同请求");
+        screen.CloseCardViewer();
+        await screen.OpenShopShelfAsync();
+        AssertTrue(screen.CardViewer.ErrorText.Contains("仍未知", StringComparison.Ordinal),
+            "关闭并重开货架不得绕过未确认的写请求");
+        await screen.RetryCardViewerAsync();
+        await WaitUntilAsync(() => !screen.IsItemSystemSubmitting && screen.CardViewer.State == CardViewerState.Content);
+        AssertEqual(transport.ActionRequestCount, writes + 3, "手动恢复只追加一次原请求");
+        AssertEqual(transport.ActionRequestBodies[^1], transport.ActionRequestBodies[requestHistoryStart],
+            "手动恢复须保持原请求 ID、版本和请求体");
+
+        await DispatchViewportClickAsync(sell);
+        await WaitUntilAsync(() => screen.CardViewer.Kind == CardViewerKind.ShopSell
+            && screen.CardViewer.State == CardViewerState.Content);
+        var item = screen.CardViewer.ItemCards.FirstOrDefault(card => !card.ActionButton.Disabled);
+        AssertTrue(item != null, "出售列表应有可操作的真实持有实例");
+        if (item == null) return;
+        var itemId = item.PlayerItemId;
+        writes = transport.ActionRequestCount;
+        var saleExecutions = transport.ShopSellExecutionCount;
+        requestHistoryStart = transport.ActionRequestBodies.Count;
+        transport.DropNextRecoverableActionResponseAfterExecution = true;
+        transport.FailItemRequestsRemaining = 2;
+        await DispatchViewportClickAsync(item.ActionButton);
+        AssertTrue(screen.CardViewer.DecisionVisible, "出售道具需要确认");
+        await DispatchViewportClickAsync(confirm);
+        await WaitUntilAsync(() => !screen.IsItemSystemSubmitting && screen.CardViewer.DecisionVisible);
+        AssertEqual(transport.ActionRequestCount, writes + 2, "出售回执丢失后应自动原样恢复一次");
+        AssertEqual(transport.ShopSellExecutionCount, saleExecutions + 1, "出售幂等恢复不得重复移除或扣费");
+        AssertEqual(transport.ActionRequestBodies.Count, requestHistoryStart + 2, "出售恢复应记录两次请求");
+        AssertEqual(transport.ActionRequestBodies[^1], transport.ActionRequestBodies[^2],
+            "出售恢复须保留原 requestId、stateVersion 和 playerItemId");
+        AssertEqual(transport.LastActionRequest?.ActionType, "SHOP_SELL_ITEM", "出售必须调用现有行动");
+        AssertEqual(transport.LastActionRequest?.Payload.Count, 1, "出售不传自定售价");
+        AssertEqual(transport.LastActionRequest?.Payload["playerItemId"]?.GetValue<long>(), itemId,
+            "出售必须提交所选持有实例");
+        AssertTrue(screen.CardViewer.DecisionMessage.Contains("已出售『服务端成交", StringComparison.Ordinal)
+            && screen.CardViewer.DecisionMessage.Contains("获得 4 金币", StringComparison.Ordinal),
+            "成交结果必须使用服务端 itemSell 名称和实际成交价");
+        AssertFalse(screen.CardViewer.DecisionMessage.Contains("获得 1 金币", StringComparison.Ordinal),
+            "成交结果不得沿用确认前预览售价");
+        await DispatchViewportClickAsync(confirm);
+        AssertEqual(screen.CardViewer.State, CardViewerState.Error, "成交后背包同步失败应保留只读错误状态");
+        AssertTrue(screen.CardViewer.ErrorText.Contains("已成功", StringComparison.Ordinal)
+            || screen.CardViewer.ErrorText.Contains("出售", StringComparison.Ordinal),
+            "成交后的只读同步失败不得误报为交易失败");
+        var writesBeforeReadRetry = transport.ActionRequestCount;
+        await screen.RetryCardViewerAsync();
+        await WaitUntilAsync(() => screen.CardViewer.State == CardViewerState.Content);
+        AssertEqual(transport.ActionRequestCount, writesBeforeReadRetry, "成交后的重试只能重新 GET 背包");
+        AssertFalse(screen.CardViewer.DisplayedCards.Any(card => card.PlayerItemId == itemId),
+            "出售后按权威背包移除该实例");
+        await DispatchViewportClickAsync(sell);
+        await WaitUntilAsync(() => screen.CardViewer.Kind == CardViewerKind.ShopShelf
+            && screen.CardViewer.State == CardViewerState.Content);
+        screen.CloseCardViewer();
+    }
+
+    private async Task VerifyQuestBoardRefreshAsync(GameScreen screen, Core9Transport transport)
+    {
+        const string actions = "OverlayRoot/Center/Layout/ContentState/ShopActions";
+        const string decision = "OverlayRoot/DecisionLayer/Center/Panel/Margin/Content/Actions";
+        var refresh = screen.CardViewer.GetNode<Button>($"{actions}/QuestRefreshButton");
+        var confirm = screen.CardViewer.GetNode<Button>($"{decision}/ConfirmButton");
+        var cancel = screen.CardViewer.GetNode<Button>($"{decision}/CancelButton");
+
+        transport.QuestRefreshAvailable = false;
+        await screen.OpenQuestBoardAsync();
+        AssertTrue(refresh.Visible && refresh.Disabled, "任务板刷新资格不足时按钮应置灰");
+        transport.QuestRefreshAvailable = true;
+        await screen.OpenQuestBoardAsync();
+        AssertFalse(refresh.Disabled, "服务端允许时任务板刷新按钮应启用");
+
+        var writes = transport.ActionRequestCount;
+        await DispatchViewportClickAsync(refresh);
+        AssertTrue(screen.CardViewer.DecisionVisible
+            && screen.CardViewer.DecisionMessage.Contains("消耗 1 社交点刷新整个公共任务板", StringComparison.Ordinal),
+            "任务板刷新必须显示准确确认文案");
+        await DispatchViewportClickAsync(cancel);
+        AssertEqual(transport.ActionRequestCount, writes, "取消任务板刷新不得发送写请求");
+
+        var executions = transport.QuestBoardRefreshExecutionCount;
+        var historyStart = transport.ActionRequestBodies.Count;
+        transport.DropNextRecoverableActionResponseAfterExecution = true;
+        await DispatchViewportClickAsync(refresh);
+        await DispatchViewportClickAsync(confirm);
+        await WaitUntilAsync(() => transport.ActionRequestCount == writes + 2
+            && screen.CardViewer.State == CardViewerState.Content
+            && !screen.IsQuestAcceptSubmitting);
+        AssertEqual(transport.ActionRequestCount, writes + 2, "任务板刷新回执丢失后应自动原样恢复一次");
+        AssertEqual(transport.QuestBoardRefreshExecutionCount, executions + 1, "任务板不得因恢复重复抽取");
+        AssertEqual(transport.ActionRequestBodies.Count, historyStart + 2, "任务板恢复应发出两次同身份请求");
+        AssertEqual(transport.ActionRequestBodies[^1], transport.ActionRequestBodies[^2],
+            "任务板恢复须保留原 requestId、stateVersion 和空 payload");
+        AssertEqual(transport.LastActionRequest?.ActionType, "REFRESH_QUEST_OFFERS", "任务板刷新行动类型正确");
+        AssertEqual(transport.LastActionRequest?.Payload.Count, 0, "任务板刷新 payload 必须为空");
+        AssertTrue(screen.CardViewer.DisplayedCards.Any(card => card.Key == "OFFICIAL_QUEST_066"),
+            "刷新成功后必须重新 GET 并展示服务端最新整板候选");
+
+        writes = transport.ActionRequestCount;
+        await WaitUntilAsync(() => !refresh.Disabled && refresh.IsVisibleInTree());
+        await ToSignal(this, SceneTree.SignalName.ProcessFrame);
+        transport.FailNextQuestRequest = true;
+        await DispatchViewportClickAsync(refresh);
+        await DispatchViewportClickAsync(confirm);
+        await WaitUntilAsync(() => transport.ActionRequestCount == writes + 1
+            && screen.CardViewer.State == CardViewerState.Error
+            && !screen.IsQuestAcceptSubmitting);
+        AssertEqual(transport.ActionRequestCount, writes + 1, "已确认刷新成功后的 GET 失败不得重发写操作");
+        AssertTrue(screen.CardViewer.ErrorText.Contains("任务板已刷新", StringComparison.Ordinal),
+            "写成功但只读同步失败必须和刷新行动失败区分");
+        await screen.RetryCardViewerAsync();
+        await WaitUntilAsync(() => screen.CardViewer.State == CardViewerState.Content);
+        AssertEqual(transport.ActionRequestCount, writes + 1, "只读重试不得再次刷新任务板");
+        screen.CloseCardViewer();
     }
 
     private async Task DispatchViewportClickAsync(Control control)
@@ -950,16 +1133,26 @@ public partial class RunCore9CardViewerTests : SceneTree
         public bool FailAcceptAction { get; set; }
         public bool AcceptQuestAvailable { get; set; } = true;
         public bool ShopBuyAvailable { get; set; } = true;
+        public bool ShopRefreshAvailable { get; set; } = true;
+        public bool QuestRefreshAvailable { get; set; } = true;
         public bool ItemActionsAvailable { get; set; } = true;
         public bool FailNextItemAction { get; set; }
+        public bool DropNextRecoverableActionResponseAfterExecution { get; set; }
+        public int UnknownRecoverableActionResponsesRemaining { get; set; }
         public bool FailNextShopRequest { get; set; }
+        public int FailItemRequestsRemaining { get; set; }
         public string? ActionReasonText { get; set; }
         public int AvailableActionsRequestCount { get; private set; }
         public int PlayerViewRequestCount { get; private set; }
         public int WriteRequestCount { get; private set; }
         public GameActionRequestDto? LastActionRequest { get; private set; }
+        public List<string> ActionRequestBodies { get; } = [];
+        public int ShopRefreshExecutionCount { get; private set; }
+        public int ShopSellExecutionCount { get; private set; }
+        public int QuestBoardRefreshExecutionCount { get; private set; }
         public TaskCompletionSource<ApiResult<QuestOfferListResponseDto>>? QuestGate { get; set; }
         public TaskCompletionSource<bool>? ActionGate { get; set; }
+        private readonly Dictionary<string, GameActionResponseDto> _idempotentActionResponses = [];
 
         public Core9Transport()
         {
@@ -1122,6 +1315,22 @@ public partial class RunCore9CardViewerTests : SceneTree
                         },
                         new AvailableActionDto
                         {
+                            ActionType = "SHOP_SELL_ITEM",
+                            Available = ShopResponse.AccessAllowed == true
+                        },
+                        new AvailableActionDto
+                        {
+                            ActionType = "SHOP_REFRESH",
+                            Available = ShopRefreshAvailable && ShopResponse.AccessAllowed == true
+                        },
+                        new AvailableActionDto
+                        {
+                            ActionType = "REFRESH_QUEST_OFFERS",
+                            Available = QuestRefreshAvailable,
+                            ReasonText = QuestRefreshAvailable ? null : "当前不能刷新任务板"
+                        },
+                        new AvailableActionDto
+                        {
                             ActionType = "EQUIP_ITEM",
                             Available = ItemActionsAvailable,
                             ReasonText = ItemActionsAvailable ? null : ActionReasonText
@@ -1203,6 +1412,13 @@ public partial class RunCore9CardViewerTests : SceneTree
             if (path == "/games/77/items" && typeof(T) == typeof(PlayerItemsResponseDto))
             {
                 ItemsRequestCount++;
+                if (FailItemRequestsRemaining > 0)
+                {
+                    FailItemRequestsRemaining--;
+                    return (ApiResult<T>)(object)ApiResult<PlayerItemsResponseDto>.Failure(
+                        "模拟成交后的背包同步失败",
+                        "NETWORK_ERROR");
+                }
                 return (ApiResult<T>)(object)ApiResult<PlayerItemsResponseDto>.Success(ItemsResponse, "success", 200);
             }
 
@@ -1214,9 +1430,16 @@ public partial class RunCore9CardViewerTests : SceneTree
                 WriteRequestCount++;
                 ActionRequestCount++;
                 LastActionRequest = actionRequest;
+                ActionRequestBodies.Add(JsonSerializer.Serialize(actionRequest));
                 if (ActionGate != null)
                 {
                     await ActionGate.Task;
+                }
+
+                if (!string.IsNullOrWhiteSpace(actionRequest.RequestId)
+                    && _idempotentActionResponses.TryGetValue(actionRequest.RequestId, out var replayResponse))
+                {
+                    return (ApiResult<T>)(object)ApiResult<GameActionResponseDto>.Success(replayResponse, "success", 200);
                 }
 
                 if (FailAcceptAction)
@@ -1227,12 +1450,23 @@ public partial class RunCore9CardViewerTests : SceneTree
                     );
                 }
 
-                if (FailNextItemAction && actionRequest.ActionType is "SHOP_BUY_ITEM" or "USE_ITEM" or "EQUIP_ITEM" or "UNEQUIP_ITEM")
+                if (FailNextItemAction && actionRequest.ActionType is "SHOP_BUY_ITEM" or "SHOP_SELL_ITEM" or "SHOP_REFRESH"
+                    or "USE_ITEM" or "EQUIP_ITEM" or "UNEQUIP_ITEM")
                 {
                     FailNextItemAction = false;
                     return (ApiResult<T>)(object)ApiResult<GameActionResponseDto>.Failure(
                         "模拟道具行动网络超时",
                         "NETWORK_TIMEOUT"
+                    );
+                }
+
+                if (UnknownRecoverableActionResponsesRemaining > 0
+                    && actionRequest.ActionType is "SHOP_SELL_ITEM" or "SHOP_REFRESH" or "REFRESH_QUEST_OFFERS")
+                {
+                    UnknownRecoverableActionResponsesRemaining--;
+                    return (ApiResult<T>)(object)ApiResult<GameActionResponseDto>.Failure(
+                        "模拟无法确认执行结果",
+                        "EMPTY_RESPONSE"
                     );
                 }
 
@@ -1288,6 +1522,57 @@ public partial class RunCore9CardViewerTests : SceneTree
                         };
                         break;
                     }
+                    case "SHOP_REFRESH":
+                    {
+                        ShopRefreshExecutionCount++;
+                        ShopResponse.Items = [NewItem(501, 1003), NewItem(502, 1013), NewItem(503, 1017)];
+                        response = NewActionResponse(oldVersion, "SHOP_REFRESH");
+                        response.ShopRefresh = new ShopRefreshResultDto
+                        {
+                            SocialCost = 2,
+                            SocialAfter = 1,
+                            Items = ShopResponse.Items
+                        };
+                        break;
+                    }
+                    case "SHOP_SELL_ITEM":
+                    {
+                        ShopSellExecutionCount++;
+                        var playerItemId = actionRequest.Payload["playerItemId"]?.GetValue<long>() ?? 0;
+                        var owned = ItemsResponse.Items!;
+                        var item = owned.Single(candidate => candidate.PlayerItemId == playerItemId);
+                        owned.Remove(item);
+                        ItemsResponse.TotalCount = owned.Count;
+                        response = NewActionResponse(oldVersion, "SHOP_SELL_ITEM");
+                        response.ItemSell = new ItemSellResultDto
+                        {
+                            PlayerItemId = playerItemId,
+                            ItemId = item.ItemId,
+                            ItemName = $"服务端成交{item.ItemName}",
+                            ItemType = item.ItemType,
+                            ItemTypeText = item.ItemTypeText,
+                            LocationAfter = "SOLD",
+                            LocationAfterText = "已出售",
+                            SellPrice = 4,
+                            CoinsAfter = 12,
+                            PrestigeAfter = 2
+                        };
+                        break;
+                    }
+                    case "REFRESH_QUEST_OFFERS":
+                    {
+                        QuestBoardRefreshExecutionCount++;
+                        QuestResponse.Offers =
+                        [
+                            NewQuest(166, 66, 1, "OFFICIAL_QUEST_066"),
+                            NewQuest(106, 6, 2, "OFFICIAL_QUEST_006"),
+                            NewQuest(107, 7, 3, "OFFICIAL_QUEST_007"),
+                            NewQuest(110, 10, 4, "OFFICIAL_QUEST_010"),
+                            NewQuest(113, 13, 5, "OFFICIAL_QUEST_013")
+                        ];
+                        response = NewActionResponse(oldVersion, "REFRESH_QUEST_OFFERS");
+                        break;
+                    }
                     case "USE_ITEM":
                     case "EQUIP_ITEM":
                     case "UNEQUIP_ITEM":
@@ -1336,6 +1621,19 @@ public partial class RunCore9CardViewerTests : SceneTree
                             $"测试传输层不支持行动 {actionRequest.ActionType}",
                             "UNEXPECTED_ACTION"
                         );
+                }
+                if (!string.IsNullOrWhiteSpace(actionRequest.RequestId))
+                {
+                    _idempotentActionResponses[actionRequest.RequestId] = response;
+                }
+                if (DropNextRecoverableActionResponseAfterExecution
+                    && actionRequest.ActionType is "SHOP_SELL_ITEM" or "SHOP_REFRESH" or "REFRESH_QUEST_OFFERS")
+                {
+                    DropNextRecoverableActionResponseAfterExecution = false;
+                    return (ApiResult<T>)(object)ApiResult<GameActionResponseDto>.Failure(
+                        "模拟服务端已执行但首次回执丢失",
+                        "EMPTY_RESPONSE"
+                    );
                 }
                 return (ApiResult<T>)(object)ApiResult<GameActionResponseDto>.Success(response, "success", 200);
             }
@@ -1399,6 +1697,7 @@ public partial class RunCore9CardViewerTests : SceneTree
                 ItemName = itemName,
                 ItemType = itemType,
                 ItemTypeText = itemType == "CONSUMABLE" ? "消耗品" : "装备",
+                SellPrice = 1,
                 Location = location,
                 LocationText = location == "HAND" ? "背包" : "已装备"
             };

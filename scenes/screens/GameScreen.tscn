@@ -1,4 +1,4 @@
-[gd_scene load_steps=13 format=3]
+[gd_scene load_steps=14 format=3]
 
 [ext_resource type="Script" path="res://scripts/ui/GameScreen.cs" id="1_game"]
 [ext_resource type="PackedScene" path="res://scenes/game/map/GameMapScene.tscn" id="2_map"]
@@ -10,6 +10,7 @@
 [ext_resource type="PackedScene" path="res://scenes/game/ui/QuestJournalOverlay.tscn" id="8_quest_journal"]
 [ext_resource type="PackedScene" path="res://scenes/game/ui/QuestCheckOverlay.tscn" id="9_quest_check"]
 [ext_resource type="PackedScene" path="res://scenes/game/ui/QuestTargetSubmissionOverlay.tscn" id="10_quest_target_submit"]
+[ext_resource type="PackedScene" path="res://scenes/game/ui/PartnerOverlay.tscn" id="11_partner"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBox_status"]
 bg_color = Color(0.035, 0.058, 0.068, 0.94)
@@ -62,6 +63,8 @@ RequireGameId = true
 [node name="QuestCheckOverlay" parent="." instance=ExtResource("9_quest_check")]
 
 [node name="QuestTargetSubmissionOverlay" parent="." instance=ExtResource("10_quest_target_submit")]
+
+[node name="PartnerOverlay" parent="." instance=ExtResource("11_partner")]
 
 [node name="GameConnectionLease" type="Node" parent="."]
 script = ExtResource("6_connection")

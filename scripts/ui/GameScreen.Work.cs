@@ -125,6 +125,7 @@ public partial class GameScreen
             || _questAcceptSubmitting
             || _questSystemSubmitting
             || _itemSystemSubmitting
+            || _partnerSubmitting
             || _moveState == PlayerMoveState.SubmittingMove
             || _latestPlayerView == null
             || _latestPlayerView.EngineState?.PendingCheck != null
@@ -622,10 +623,13 @@ public partial class GameScreen
                     ?.Trim().ToUpperInvariant() ?? "";
                 var forestMove = businessType == "FOREST_MOVE";
                 var questCheck = businessType == "QUEST";
+                var partnerRecruit = businessType == "PARTNER_RECRUIT";
                 var valid = forestMove
                     ? TryValidateForestMoveResult(result.Data, checkId, out var validationError)
                     : questCheck
                         ? TryValidateQuestResult(result.Data, checkId, out validationError)
+                        : partnerRecruit
+                            ? TryValidatePartnerRecruitResult(result.Data, checkId, out validationError)
                         : TryValidateWorkResult(result.Data, checkId, out validationError);
                 if (!valid)
                 {
@@ -644,7 +648,7 @@ public partial class GameScreen
                 _unresolvedRerollRequest = null;
                 _workPendingCheck = null;
                 _knownWorkCheckId = checkId;
-                _knownPendingBusinessType = forestMove ? "FOREST_MOVE" : questCheck ? "QUEST" : "WORK";
+                _knownPendingBusinessType = forestMove ? "FOREST_MOVE" : questCheck ? "QUEST" : partnerRecruit ? "PARTNER_RECRUIT" : "WORK";
                 var view = result.Data.PlayerViewState;
                 if (view != null
                     && ValidatePlayerView(view, gameId, _currentUserId, out _)
@@ -662,6 +666,11 @@ public partial class GameScreen
                 {
                     _returnToQuestChecksAfterResult = true;
                     _workDiceOverlay.ShowQuestResult(result.Data);
+                }
+                else if (partnerRecruit)
+                {
+                    _returnToPartnerRewardAfterResult = true;
+                    _workDiceOverlay.ShowPartnerRecruitResult(result.Data);
                 }
                 else
                 {
@@ -796,6 +805,7 @@ public partial class GameScreen
         if (pending != null
             && (string.Equals(pending.BusinessType, "WORK", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(pending.BusinessType, "QUEST", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(pending.BusinessType, "PARTNER_RECRUIT", StringComparison.OrdinalIgnoreCase)
                 || (SupportsMovementV2
                     && string.Equals(pending.BusinessType, "FOREST_MOVE", StringComparison.OrdinalIgnoreCase)))
             && TryGetCurrentPlayer(out var player)
@@ -851,6 +861,10 @@ public partial class GameScreen
         {
             _expectedQuestPlayerQuestId = pending.BusinessSourceId ?? 0;
             _returnToQuestChecksAfterResult = true;
+        }
+        if (string.Equals(_knownPendingBusinessType, "PARTNER_RECRUIT", StringComparison.Ordinal))
+        {
+            _returnToPartnerRewardAfterResult = true;
         }
         _unresolvedRerollRequest = null;
         _unresolvedRollRequest = null;
@@ -1009,9 +1023,13 @@ public partial class GameScreen
                 out pending,
                 out error);
         }
+        if (string.Equals(type, "PARTNER_RECRUIT", StringComparison.OrdinalIgnoreCase))
+        {
+            return TryValidatePendingPartnerRecruit(source, gameId, playerId ?? 0, out pending, out error);
+        }
 
         pending = source!;
-        error = "当前待判定不是客户端已接入的 QUEST、WORK 或 FOREST_MOVE。";
+        error = "当前待判定不是客户端已接入的 QUEST、WORK、FOREST_MOVE 或 PARTNER_RECRUIT。";
         return false;
     }
 
@@ -1225,6 +1243,26 @@ public partial class GameScreen
         return true;
     }
 
+    private static bool TryValidatePartnerRecruitResult(CheckRollResponseDto response, long checkId, out string error)
+    {
+        if (response.PendingCheck?.CheckId != checkId
+            || !string.Equals(response.PendingCheck.BusinessType, "PARTNER_RECRUIT", StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(response.PendingCheck.Status, "COMPLETED", StringComparison.OrdinalIgnoreCase))
+        {
+            error = "服务端伙伴招募最终回执缺少匹配的已完成判定。";
+            return false;
+        }
+        if (response.SubmittedDice is not (>= 1 and <= 6)
+            || response.EffectiveDice is not (>= 1 and <= 6)
+            || response.CheckResult?.Success == null)
+        {
+            error = "服务端伙伴招募最终回执缺少有效骰点或判定结果。";
+            return false;
+        }
+        error = "";
+        return true;
+    }
+
     private void OnWorkRequested() => _ = BeginWorkAsync();
     private void OnWorkAttributeSelected(string attributeType) => _ = SubmitSelectedWorkAttributeAsync(attributeType);
     private void OnWorkAttributeSelectionCancelled() => CancelWorkAttributeSelection();
@@ -1238,6 +1276,8 @@ public partial class GameScreen
             && string.Equals(_knownPendingBusinessType, "FOREST_MOVE", StringComparison.OrdinalIgnoreCase);
         var returnToQuestChecks = _returnToQuestChecksAfterResult
             && string.Equals(_knownPendingBusinessType, "QUEST", StringComparison.OrdinalIgnoreCase);
+        var returnToPartnerReward = _returnToPartnerRewardAfterResult
+            && string.Equals(_knownPendingBusinessType, "PARTNER_RECRUIT", StringComparison.OrdinalIgnoreCase);
         _workDiceOverlay.CloseOverlay();
         _workPendingCheck = null;
         _knownWorkCheckId = 0;
@@ -1247,15 +1287,16 @@ public partial class GameScreen
         _workPreparationUncertain = false;
         _resumeNormalMoveAfterForestResult = false;
         _returnToQuestChecksAfterResult = false;
+        _returnToPartnerRewardAfterResult = false;
         _expectedQuestPlayerQuestId = 0;
         _hud.SetWorkBlocked(null);
         _hud.SetActionControlsLocked(false);
         // 结果层可能在最终回执后的只读同步结束前就被点击关闭。
         // 先等待本次确认任务完整收尾，再依据最新权威状态恢复普通移动，避免一次竞态永久丢失恢复机会。
-        _ = ResumeAfterCheckResultAsync(resumeForestMove, returnToQuestChecks, _generation);
+        _ = ResumeAfterCheckResultAsync(resumeForestMove, returnToQuestChecks, returnToPartnerReward, _generation);
     }
 
-    private async Task ResumeAfterCheckResultAsync(bool resumeForestMove, bool returnToQuestChecks, int generation)
+    private async Task ResumeAfterCheckResultAsync(bool resumeForestMove, bool returnToQuestChecks, bool returnToPartnerReward, int generation)
     {
         while (_checkSubmitting && IsResponseCurrent(generation))
         {
@@ -1270,6 +1311,11 @@ public partial class GameScreen
         if (returnToQuestChecks && IsResponseCurrent(generation))
         {
             await ReturnToQuestChecksAfterResultAsync(generation);
+            return;
+        }
+        if (returnToPartnerReward && IsResponseCurrent(generation))
+        {
+            RoutePartnerRewardOrTeam();
             return;
         }
         if (!resumeForestMove || !IsResponseCurrent(generation) || !SupportsMovementV2)

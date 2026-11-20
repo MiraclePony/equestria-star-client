@@ -12,7 +12,8 @@ public enum CardViewerKind
     ShopShelf,
     PersonalQuests,
     Inventory,
-    Equipment
+    Equipment,
+    ShopSell
 }
 
 public enum CardViewerState
@@ -35,7 +36,8 @@ public sealed record CardViewerCard(
     string? ItemName = null,
     string? ItemType = null,
     string? Location = null,
-    CardActionAvailability? ActionAvailability = null
+    CardActionAvailability? ActionAvailability = null,
+    int? SellPrice = null
 );
 
 public sealed record CardActionAvailability(bool Enabled, string TooltipText)
@@ -57,6 +59,11 @@ public partial class CardViewerOverlay : CanvasLayer
     [Signal]
     public delegate void CardActionPressedEventHandler(int kind, long primaryId, long secondaryId);
 
+    [Signal] public delegate void ShopSellViewRequestedEventHandler();
+    [Signal] public delegate void ShopRefreshRequestedEventHandler();
+    [Signal] public delegate void ShopShelfBackRequestedEventHandler();
+    [Signal] public delegate void QuestBoardRefreshRequestedEventHandler();
+
     private const int MaximumVisibleCards = 3;
     private const float QuestAspectRatio = 2161.0f / 1453.0f;
     private const float ItemAspectRatio = 1453.0f / 2161.0f;
@@ -74,7 +81,7 @@ public partial class CardViewerOverlay : CanvasLayer
     private Control _loadingState = null!;
     private Control _contentState = null!;
     private Label _emptyLabel = null!;
-    private HBoxContainer _cardRow = null!;
+    private BoxContainer _cardRow = null!;
     private ScrollContainer _personalQuestScroll = null!;
     private HBoxContainer _personalQuestRow = null!;
     private Control _errorState = null!;
@@ -85,7 +92,12 @@ public partial class CardViewerOverlay : CanvasLayer
     private VBoxContainer _decisionOptions = null!;
     private Button _decisionConfirm = null!;
     private Button _decisionCancel = null!;
-    private readonly List<VBoxContainer> _cardSlots = [];
+    private HBoxContainer _shopActions = null!;
+    private Button _shopSell = null!;
+    private Button _shopRefresh = null!;
+    private Button _questRefresh = null!;
+    private Action? _shopDecision;
+    private readonly List<BoxContainer> _cardSlots = [];
     private readonly List<AspectRatioContainer> _cardAspects = [];
     private readonly List<TextureRect> _cardTextures = [];
     private readonly List<PanelContainer> _actionAreas = [];
@@ -114,6 +126,7 @@ public partial class CardViewerOverlay : CanvasLayer
     public Control InputBlocker => _overlayRoot;
     public ScrollContainer PersonalQuestScroll => _personalQuestScroll;
     public bool DecisionVisible => IsNodeReady() && _decisionLayer.Visible;
+    public string DecisionMessage => IsNodeReady() ? _decisionMessage.Text : "";
     public IReadOnlyList<InventoryItemCard> ItemCards => _itemCards;
 
     public override void _Ready()
@@ -126,7 +139,7 @@ public partial class CardViewerOverlay : CanvasLayer
         _loadingState = GetNode<Control>("OverlayRoot/Center/Layout/LoadingState");
         _contentState = GetNode<Control>("OverlayRoot/Center/Layout/ContentState");
         _emptyLabel = GetNode<Label>("OverlayRoot/Center/Layout/ContentState/EmptyLabel");
-        _cardRow = GetNode<HBoxContainer>("OverlayRoot/Center/Layout/ContentState/CardRow");
+        _cardRow = GetNode<BoxContainer>("OverlayRoot/Center/Layout/ContentState/CardRow");
         _personalQuestScroll = GetNode<ScrollContainer>("OverlayRoot/Center/Layout/ContentState/PersonalQuestScroll");
         _personalQuestRow = GetNode<HBoxContainer>("OverlayRoot/Center/Layout/ContentState/PersonalQuestScroll/PersonalQuestRow");
         _errorState = GetNode<Control>("OverlayRoot/Center/Layout/ErrorState");
@@ -137,10 +150,17 @@ public partial class CardViewerOverlay : CanvasLayer
         _decisionOptions = GetNode<VBoxContainer>("OverlayRoot/DecisionLayer/Center/Panel/Margin/Content/ReplacementOptions");
         _decisionConfirm = GetNode<Button>("OverlayRoot/DecisionLayer/Center/Panel/Margin/Content/Actions/ConfirmButton");
         _decisionCancel = GetNode<Button>("OverlayRoot/DecisionLayer/Center/Panel/Margin/Content/Actions/CancelButton");
+        _shopActions = GetNode<HBoxContainer>("OverlayRoot/Center/Layout/ContentState/ShopActions");
+        _shopSell = _shopActions.GetNode<Button>("SellButton");
+        _shopRefresh = _shopActions.GetNode<Button>("RefreshButton");
+        _questRefresh = _shopActions.GetNode<Button>("QuestRefreshButton");
+        _shopSell.Pressed += OnShopSellButtonPressed;
+        _shopRefresh.Pressed += OnShopRefreshButtonPressed;
+        _questRefresh.Pressed += OnQuestRefreshButtonPressed;
 
         for (var index = 1; index <= MaximumVisibleCards; index++)
         {
-            var slot = GetNode<VBoxContainer>($"OverlayRoot/Center/Layout/ContentState/CardRow/CardSlot{index}");
+            var slot = GetNode<BoxContainer>($"OverlayRoot/Center/Layout/ContentState/CardRow/CardSlot{index}");
             var cardAspect = slot.GetNode<AspectRatioContainer>("CardAspect");
             var actionArea = slot.GetNode<PanelContainer>("ActionArea");
             var actionButton = actionArea.GetNode<Button>("ActionButton");
@@ -162,6 +182,7 @@ public partial class CardViewerOverlay : CanvasLayer
         _decisionConfirm.Pressed += OnDecisionConfirmed;
         _decisionCancel.Pressed += CloseDecision;
         GetViewport().SizeChanged += OnViewportSizeChanged;
+        SetupDrawerPresentation();
         _overlayRoot.Visible = false;
         ApplyState(CardViewerState.Closed);
         CloseDecision();
@@ -181,6 +202,9 @@ public partial class CardViewerOverlay : CanvasLayer
 
         if (GodotObject.IsInstanceValid(_decisionConfirm)) _decisionConfirm.Pressed -= OnDecisionConfirmed;
         if (GodotObject.IsInstanceValid(_decisionCancel)) _decisionCancel.Pressed -= CloseDecision;
+        if (GodotObject.IsInstanceValid(_shopSell)) _shopSell.Pressed -= OnShopSellButtonPressed;
+        if (GodotObject.IsInstanceValid(_shopRefresh)) _shopRefresh.Pressed -= OnShopRefreshButtonPressed;
+        if (GodotObject.IsInstanceValid(_questRefresh)) _questRefresh.Pressed -= OnQuestRefreshButtonPressed;
 
         if (GodotObject.IsInstanceValid(_personalQuestScroll))
         {
@@ -201,6 +225,8 @@ public partial class CardViewerOverlay : CanvasLayer
         }
 
         Kind = kind;
+        ApplyPresentation(kind);
+        CloseDecision();
         _displayedKeys.Clear();
         _displayedCards.Clear();
         ClearTextures();
@@ -208,7 +234,7 @@ public partial class CardViewerOverlay : CanvasLayer
         _hintLabel.Text = IsScrollableKind(kind)
             ? "只读查看 · 滚轮或拖动滚动条浏览 · 点击其他区域关闭"
             : "点击卡牌下方按钮操作 · 点击其他区域关闭";
-        if (kind is CardViewerKind.Inventory or CardViewerKind.Equipment)
+        if (kind is CardViewerKind.Inventory or CardViewerKind.Equipment or CardViewerKind.ShopSell)
         {
             _hintLabel.Text = "滚轮或拖动滚动条浏览 · 点击卡牌下方按钮操作";
         }
@@ -225,6 +251,7 @@ public partial class CardViewerOverlay : CanvasLayer
     {
         ArgumentNullException.ThrowIfNull(cards);
         Kind = kind;
+        ApplyPresentation(kind);
         _displayedKeys.Clear();
         _displayedCards.Clear();
         ClearTextures();
@@ -242,7 +269,7 @@ public partial class CardViewerOverlay : CanvasLayer
         {
             CreatePersonalQuestCards(visibleCards);
         }
-        else if (kind is CardViewerKind.Inventory or CardViewerKind.Equipment)
+        else if (kind is CardViewerKind.Inventory or CardViewerKind.Equipment or CardViewerKind.ShopSell)
         {
             CreateInventoryItemCards(visibleCards);
         }
@@ -268,6 +295,7 @@ public partial class CardViewerOverlay : CanvasLayer
             CardViewerKind.ShopShelf => "当前公共货架暂无卡牌。",
             CardViewerKind.Inventory => "背包中没有手牌道具。",
             CardViewerKind.Equipment => "当前没有已装备道具。",
+            CardViewerKind.ShopSell => "当前没有可出售的道具。",
             _ => "当前没有已接任务。"
         };
         _emptyLabel.Visible = visibleCards.Count == 0;
@@ -277,6 +305,66 @@ public partial class CardViewerOverlay : CanvasLayer
         ApplyState(CardViewerState.Content);
         RefreshActionButtons();
         RefreshCardSlotSizes();
+    }
+
+    public void UpdateShopActions(CardActionAvailability sell, CardActionAvailability refresh)
+    {
+        _shopSell.Disabled = Kind != CardViewerKind.ShopSell && !sell.Enabled;
+        _shopSell.TooltipText = Kind == CardViewerKind.ShopSell ? "" : sell.TooltipText;
+        _shopRefresh.Disabled = !refresh.Enabled;
+        _shopRefresh.TooltipText = refresh.TooltipText;
+    }
+
+    public void UpdateQuestBoardRefresh(CardActionAvailability availability)
+    {
+        _questRefresh.Disabled = !availability.Enabled;
+        _questRefresh.TooltipText = availability.TooltipText;
+    }
+
+    private void OnShopSellButtonPressed()
+    {
+        if (_shopSell.Disabled || State != CardViewerState.Content) return;
+        if (Kind == CardViewerKind.ShopSell) EmitSignal(SignalName.ShopShelfBackRequested);
+        else if (Kind == CardViewerKind.ShopShelf) EmitSignal(SignalName.ShopSellViewRequested);
+    }
+
+    private void OnShopRefreshButtonPressed()
+    {
+        if (_shopRefresh.Disabled || Kind != CardViewerKind.ShopShelf || State != CardViewerState.Content) return;
+        OpenShopDecision("消耗 2 社交点刷新公共货架？", "刷新货架",
+            () => EmitSignal(SignalName.ShopRefreshRequested));
+    }
+
+    private void OnQuestRefreshButtonPressed()
+    {
+        if (_questRefresh.Disabled || Kind != CardViewerKind.QuestBoard || State != CardViewerState.Content) return;
+        OpenShopDecision("消耗 1 社交点刷新整个公共任务板？", "刷新任务板",
+            () => EmitSignal(SignalName.QuestBoardRefreshRequested));
+    }
+
+    private void OpenShopDecision(string message, string buttonText, Action confirm)
+    {
+        CloseDecision();
+        _shopDecision = confirm;
+        _decisionMessage.Text = message;
+        _decisionConfirm.Text = buttonText;
+        _decisionConfirm.Visible = true;
+        _decisionCancel.Visible = true;
+        _decisionLayer.Visible = true;
+        ResetCloseGesture();
+    }
+
+    public void ShowNotice(string message)
+    {
+        CloseDecision();
+        _shopDecision = static () => { };
+        _decisionMessage.Text = string.IsNullOrWhiteSpace(message) ? "操作已完成。" : message.Trim();
+        _decisionConfirm.Text = "确定";
+        _decisionConfirm.Visible = true;
+        _decisionCancel.Visible = false;
+        _overlayRoot.Visible = true;
+        _decisionLayer.Visible = true;
+        ResetCloseGesture();
     }
 
     public void UpdateActionAvailability(CardActionAvailability availability)
@@ -320,13 +408,16 @@ public partial class CardViewerOverlay : CanvasLayer
         return _actionAreas[index];
     }
 
-    public void ShowError(CardViewerKind kind, string message)
+    public void ShowError(CardViewerKind kind, string message, string retryText = "重试")
     {
         Kind = kind;
+        ApplyPresentation(kind);
         _displayedKeys.Clear();
         _displayedCards.Clear();
         ClearTextures();
         _errorLabel.Text = string.IsNullOrWhiteSpace(message) ? "卡牌数据加载失败，请重试。" : message.Trim();
+        _retryButton.Text = retryText;
+        _retryButton.TooltipText = "";
         _overlayRoot.Visible = true;
         ApplyState(CardViewerState.Error);
     }
@@ -374,6 +465,14 @@ public partial class CardViewerOverlay : CanvasLayer
         _errorState.Visible = state == CardViewerState.Error;
         _retryButton.Visible = state == CardViewerState.Error;
         _retryButton.Disabled = state != CardViewerState.Error;
+        _shopActions.Visible = state == CardViewerState.Content
+            && Kind is CardViewerKind.QuestBoard or CardViewerKind.ShopShelf or CardViewerKind.ShopSell;
+        _shopSell.Text = Kind == CardViewerKind.ShopSell ? "返回货架" : "出售道具";
+        _shopSell.Visible = Kind is CardViewerKind.ShopShelf or CardViewerKind.ShopSell;
+        _shopRefresh.Visible = Kind == CardViewerKind.ShopShelf;
+        _questRefresh.Visible = Kind == CardViewerKind.QuestBoard;
+        UpdateShopActions(CardActionAvailability.Loading, CardActionAvailability.Loading);
+        UpdateQuestBoardRefresh(CardActionAvailability.Loading);
     }
 
     private void ClearTextures()
@@ -419,6 +518,11 @@ public partial class CardViewerOverlay : CanvasLayer
 
     private void RefreshCardSlotSizes()
     {
+        if (_drawerPresentation)
+        {
+            RefreshDrawerCardSizes();
+            return;
+        }
         if (!IsNodeReady() || Kind == CardViewerKind.None)
         {
             return;
@@ -429,7 +533,7 @@ public partial class CardViewerOverlay : CanvasLayer
         if (IsScrollableKind(Kind))
         {
             var scrollWidth = Mathf.Min(1600.0f, availableWidth);
-            var isItemView = Kind is CardViewerKind.Inventory or CardViewerKind.Equipment;
+            var isItemView = Kind is CardViewerKind.Inventory or CardViewerKind.Equipment or CardViewerKind.ShopSell;
             var scrollCardRatio = isItemView ? ItemAspectRatio : QuestAspectRatio;
             var cardWidth = Mathf.Min(isItemView ? 330.0f : 500.0f, (scrollWidth - 48.0f) / 3.0f);
             var cardHeight = cardWidth / scrollCardRatio;
@@ -543,7 +647,10 @@ public partial class CardViewerOverlay : CanvasLayer
             var cardNode = InventoryItemCardScene.Instantiate<InventoryItemCard>();
             _personalQuestRow.AddChild(cardNode);
             var availability = card.ActionAvailability ?? CardActionAvailability.Loading;
-            cardNode.Bind(card, ActionTextFor(card), availability, 330.0f, ItemAspectRatio);
+            var actionText = Kind == CardViewerKind.ShopSell
+                ? card.SellPrice is int price ? $"出售 · {price} 金币" : "出售"
+                : ActionTextFor(card);
+            cardNode.Bind(card, actionText, availability, 330.0f, ItemAspectRatio);
             cardNode.ActionRequested += OnInventoryItemActionRequested;
             _itemCards.Add(cardNode);
         }
@@ -554,6 +661,14 @@ public partial class CardViewerOverlay : CanvasLayer
         var card = _displayedCards.FirstOrDefault(candidate => candidate.PlayerItemId == playerItemId);
         if (card == null)
         {
+            return;
+        }
+
+        if (Kind == CardViewerKind.ShopSell)
+        {
+            if (card.SellPrice is not int price) return;
+            OpenShopDecision($"出售「{DisplayItemName(card)}」？消耗 1 社交点，获得 {price} 金币。",
+                "出售", () => EmitSignal(SignalName.CardActionPressed, (int)CardViewerKind.ShopSell, playerItemId, 0L));
             return;
         }
 
@@ -616,8 +731,14 @@ public partial class CardViewerOverlay : CanvasLayer
 
     private void OnDecisionConfirmed()
     {
+        var shopDecision = _shopDecision;
         var playerItemId = _decisionPlayerItemId;
         CloseDecision();
+        if (shopDecision != null)
+        {
+            shopDecision();
+            return;
+        }
         if (playerItemId > 0)
         {
             EmitSignal(SignalName.CardActionPressed, (int)CardViewerKind.Inventory, playerItemId, 0L);
@@ -641,7 +762,9 @@ public partial class CardViewerOverlay : CanvasLayer
             return;
         }
         _decisionLayer.Visible = false;
+        _shopDecision = null;
         _decisionPlayerItemId = 0;
+        _decisionCancel.Visible = true;
         ClearDecisionOptions();
     }
 
@@ -723,12 +846,13 @@ public partial class CardViewerOverlay : CanvasLayer
             CardViewerKind.PersonalQuests => "当前任务",
             CardViewerKind.Inventory => "背包",
             CardViewerKind.Equipment => "装备区",
+            CardViewerKind.ShopSell => "出售道具",
             _ => "卡牌查看"
         };
     }
 
     private static bool IsScrollableKind(CardViewerKind kind) =>
-        kind is CardViewerKind.PersonalQuests or CardViewerKind.Inventory or CardViewerKind.Equipment;
+        kind is CardViewerKind.PersonalQuests or CardViewerKind.Inventory or CardViewerKind.Equipment or CardViewerKind.ShopSell;
 
     private static string ActionTextFor(CardViewerCard card)
     {

@@ -175,6 +175,7 @@ public partial class GameScreen
             || _questAcceptSubmitting
             || _questSystemSubmitting
             || _itemSystemSubmitting
+            || _partnerSubmitting
             || _moveState == PlayerMoveState.SubmittingMove
             || _workPreparing
             || _checkSubmitting
@@ -201,6 +202,7 @@ public partial class GameScreen
             || _questAcceptSubmitting
             || _questSystemSubmitting
             || _itemSystemSubmitting
+            || _partnerSubmitting
             || _moveState == PlayerMoveState.SubmittingMove)
         {
             return _questCheckTask;

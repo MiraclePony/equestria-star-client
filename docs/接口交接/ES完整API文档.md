@@ -110,7 +110,7 @@ CORE_9 的 `/actions`、`/roll`、`/reroll` 必须传 `requestId`，建议每次
 | GET | `/api/v1/games/{gameId}/items` | 本局自己的玩家 | query playerId必填 | PlayerInventoryResponse | 本次接入背包/道具详情 |
 | GET | `/api/v1/games/{gameId}/quests` | 本局自己的玩家 | query playerId必填 | PlayerQuestListResponse | 优先 |
 | GET | `/api/v1/games/{gameId}/quest-offers` | 本局自己的玩家 | query playerId必填 | QuestOfferListResponse | 优先 |
-| GET | `/api/v1/games/{gameId}/partners` | 本局自己的玩家 | query playerId必填 | PlayerPartnerListResponse | 暂不优先 |
+| GET | `/api/v1/games/{gameId}/partners` | 本局自己的玩家 | query playerId必填 | PlayerPartnerListResponse | 客户端已接；新版写操作待后端部署 |
 | GET | `/api/v1/games/{gameId}/available-actions` | 本局自己的玩家 | query playerId必填 | AvailableActionVO[] | 必需 |
 | GET | `/api/v1/games/{gameId}/players/{playerId}/movable-cells` | 本局自己的玩家 | 无 | MapCellVO[] | 优先 |
 | POST | `/api/v1/games/{gameId}/players/{playerId}/connection` | 本局自己的玩家 | query connected必填；JSON clientInstanceId/connectionId见第7节 | PlayerViewResponse，回执在engineState.connection | 必需，周期心跳 |
@@ -426,7 +426,7 @@ Content-Type: application/json
 ### 8.5 其他只读接口
 
 - `GET /api/v1/games/{gameId}/work/current?playerId={playerId}`：data为null表示当前无匹配工作；有值时为cellId、cellName／cellNameText、attributeType／attributeTypeText、difficulty、socialCost、rewardCoins。固定属性直接使用服务端返回的具体枚举；attributeType=`ANY`时必须由玩家选择`STRENGTH`、`SPEED`、`SOCIAL`、`CHARM`、`MAGIC`或`MIND`之一，`ANY`本身不能提交。rewardCoins为基础成功奖励预览，实际打工收入取最终/roll的workResult.rewardCoins（第10.5～10.10节）。当前主动WORK走准备投骰，不沿用旧版“请求立即出随机结果”。
-- `GET /api/v1/games/{gameId}/partners?playerId={playerId}`：data为gameId、playerId、partners数组；项包含playerPartnerId、partnerId、partnerCode、partnerName、partnerType、description、六维文本、recruitCondition、skillOne/Two、bondSkill、status等。PENDING_ACTIVE不等于ACTIVE。
+- `GET /api/v1/games/{gameId}/partners?playerId={playerId}`：data为gameId、playerId、stateVersion、整体dismissal及partners数组；项包含playerPartnerId、partnerId、partnerCode、partnerName、partnerType、description、六维文本、recruitCondition、skillOne/Two、bondSkill、status和逐实例dismissal。PENDING_ACTIVE不等于ACTIVE。新版写操作以新鲜`player-view.engineState.partnerRecruitmentVersion=1`为门槛；逐方式、杂物选物和独立遣散以`CORE_9伙伴招募与遣散_接口交接.md`为准，后端尚未部署。
 - `GET /api/v1/games/{gameId}/action-logs?limit=20`：data为ActionLog数组，包含logId、gameId、stateVersion、playerId、playerName、actionType/actionTypeText、message、rawMessageText、rawMessage、createdAt。
 - `GET /api/v1/games/{gameId}/check-logs?limit=20`：data为CheckLogDetail数组，字段为checkLogId、gameId、playerId、stateVersion、sourceType/sourceTypeText、dice、attributeType/attributeTypeText、attributeValue、modifier、finalValue、difficulty、resultType/resultTypeText、createdAt。只检视服务端最终判定，不生成骰点、不结算任务。limit可省略，受服务端默认及上限裁剪。
 
@@ -467,9 +467,9 @@ CORE_9四项 requestId/playerId/stateVersion/actionType 必填；payload按行�
 | RESOLVE_TURN_START_EFFECT | `{"rewardId":71,"cardId":901}` 或 `{"rewardId":71,"abandon":true}` | 必需：通用FIFO队首处理，名字不限制只在START使用 |
 | USE_RAILWAY | `{"targetCellId":100086}` | 已部署独立行动，每次仅相邻一站，1金币+1行动值；目标从铁路模式查询 |
 | WORK | `{"attributeType":"SOCIAL"}` | 已接入准备与主动投骰；ANY工作先由玩家选择六维具体枚举，禁止提交ANY |
-| DRAW_PARTNER_OFFER | `{}` | 暂不优先：招募点准备判定，不传中间骰点 |
-| RECRUIT_PARTNER | `{"rewardId":71,"cardId":901,"conditionIndex":1}` | 暂不优先：PARTNER队首；满员合法替换另传dismissPlayerPartnerId |
-| RECRUIT_PARTNER_FROM_OFFER | 同上 | 兼容同一PARTNER队首流程，不重复招募 |
+| DRAW_PARTNER_OFFER | `{}` | 客户端本地已接：招募准备判定，不传中间骰点；待新版后端部署 |
+| RECRUIT_PARTNER_FROM_OFFER | `{"rewardId":71,"cardId":901,"conditionIndex":1}`；杂物方式另传`playerItemId` | PARTNER队首逐方式资格；conditionIndex直接使用响应值，不传旧dismissPlayerPartnerId |
+| DISMISS_PARTNER | `{"playerPartnerId":301}` | 新版独立遣散；资格、费用和原因读取`/partners`，不依赖满栏或候选 |
 | PLAY_ITEM | `{"playerItemId":801}` | 本次可接入：由类型分派装备／使用，不与具体动作重复提交 |
 | EQUIP_ITEM | `{"playerItemId":801}` | 本次接入：需要替换时加replacePlayerItemId，最多2件 |
 | USE_ITEM | `{"playerItemId":801}` | 本次接入：仅本批准入消耗品，不补当前剩余行动资源 |
@@ -858,7 +858,7 @@ canExecute,executeUnavailableReason,unavailableReason,canAbandon,abandonUnavaila
 
 cardId来自该队首candidate，不是itemId。canExecute=false时禁止领取，展示原因并可查看背包；canAbandon=true时可放弃。FORCED_TARGET等强制待办不可主动放弃。不要只用canResolve判断“领取可点击”，它表示归属权，不代表容量和执行条件满足。
 
-有队首时不能移动、交易、发动普通技能或结束回合，只能处理队首及服务端允许的合法整理；整理仍受资源、当前回合和次数约束，不保证一定可做。没有通用独立遣散伙伴接口；不要从招募替换参数推导出可随时遣散。
+有队首时不能移动、交易、发动普通技能或结束回合，只能处理队首及服务端允许的合法整理；整理仍受资源、当前回合和次数约束，不保证一定可做。新版伙伴专项提供`DISMISS_PARTNER`独立遣散，必须以`partnerRecruitmentVersion=1`及`/partners`逐实例资格为准；不能从旧招募替换参数推导资格，也不能把该能力推定为已经部署。
 
 奖励按FIFO逐个处理。END产生奖励时，会阻塞交接到下一玩家，处理完后服务端继续原游标；客户端不能手动跳过该阶段。
 

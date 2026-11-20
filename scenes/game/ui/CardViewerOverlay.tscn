@@ -134,6 +134,29 @@ layout_mode = 2
 mouse_filter = 2
 theme_override_constants/separation = 12
 
+[node name="ShopActions" type="HBoxContainer" parent="OverlayRoot/Center/Layout/ContentState"]
+visible = false
+layout_mode = 2
+mouse_filter = 2
+alignment = 1
+theme_override_constants/separation = 12
+
+[node name="SellButton" type="Button" parent="OverlayRoot/Center/Layout/ContentState/ShopActions" groups=["blocks_map_input"]]
+custom_minimum_size = Vector2(128, 44)
+layout_mode = 2
+text = "出售道具"
+
+[node name="RefreshButton" type="Button" parent="OverlayRoot/Center/Layout/ContentState/ShopActions" groups=["blocks_map_input"]]
+custom_minimum_size = Vector2(144, 44)
+layout_mode = 2
+text = "刷新货架"
+
+[node name="QuestRefreshButton" type="Button" parent="OverlayRoot/Center/Layout/ContentState/ShopActions" groups=["blocks_map_input"]]
+visible = false
+custom_minimum_size = Vector2(160, 44)
+layout_mode = 2
+text = "刷新任务板"
+
 [node name="EmptyLabel" type="Label" parent="OverlayRoot/Center/Layout/ContentState"]
 visible = false
 custom_minimum_size = Vector2(720, 220)
@@ -145,7 +168,7 @@ vertical_alignment = 1
 theme_override_colors/font_color = Color(0.9, 0.94, 0.95, 1)
 theme_override_font_sizes/font_size = 20
 
-[node name="CardRow" type="HBoxContainer" parent="OverlayRoot/Center/Layout/ContentState"]
+[node name="CardRow" type="BoxContainer" parent="OverlayRoot/Center/Layout/ContentState"]
 layout_mode = 2
 mouse_filter = 2
 alignment = 1
@@ -165,7 +188,7 @@ layout_mode = 2
 mouse_filter = 2
 theme_override_constants/separation = 24
 
-[node name="CardSlot1" type="VBoxContainer" parent="OverlayRoot/Center/Layout/ContentState/CardRow"]
+[node name="CardSlot1" type="BoxContainer" parent="OverlayRoot/Center/Layout/ContentState/CardRow"]
 custom_minimum_size = Vector2(520, 408)
 layout_mode = 2
 mouse_filter = 2
@@ -194,7 +217,7 @@ custom_minimum_size = Vector2(0, 46)
 layout_mode = 2
 text = "接取"
 
-[node name="CardSlot2" type="VBoxContainer" parent="OverlayRoot/Center/Layout/ContentState/CardRow"]
+[node name="CardSlot2" type="BoxContainer" parent="OverlayRoot/Center/Layout/ContentState/CardRow"]
 custom_minimum_size = Vector2(520, 408)
 layout_mode = 2
 mouse_filter = 2
@@ -223,7 +246,7 @@ custom_minimum_size = Vector2(0, 46)
 layout_mode = 2
 text = "接取"
 
-[node name="CardSlot3" type="VBoxContainer" parent="OverlayRoot/Center/Layout/ContentState/CardRow"]
+[node name="CardSlot3" type="BoxContainer" parent="OverlayRoot/Center/Layout/ContentState/CardRow"]
 custom_minimum_size = Vector2(520, 408)
 layout_mode = 2
 mouse_filter = 2
